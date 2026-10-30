@@ -12,7 +12,14 @@ export type Cliente = {
 
 export type Treino = { id: number; nome: string; descricao?: string; modalidade?: string; nivel?: string; idUsuario?: number };
 export type Exercico = { id: number; nome: string; grupoMuscular?: string; descricao?: string; demonstracaoVideo?: string; modalidade?: string; nivel?: string };
-export type RelacaoExercicio = { idTreino: number; idExercicio: number; series?: number; repeticoes?: string | number; carga?: string | number };
+export type RelacaoExercicio = {
+  idTreino?: number;
+  idExercicio?: number;
+  id?: number | { idTreino?: number; idExercicio?: number };
+  series?: number;
+  repeticoes?: string | number;
+  carga?: string | number;
+};
 export type AgendaItem = { id: number; dataAgendada: string; status: string; idUsuario: number; idTreino: number; liberado: boolean };
 
 export class ApiError extends Error {

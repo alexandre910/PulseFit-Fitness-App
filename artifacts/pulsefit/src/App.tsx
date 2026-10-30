@@ -177,7 +177,11 @@ function TreinoDetalhe() {
   const treinoQuery = useTreinos(useCliente());
   const detail = useQuery({ queryKey: ['treino-detail', id], enabled: Number.isFinite(id), queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
-    const settled = await Promise.allSettled(relations.map(async (relation) => ({ relation, exercise: await request<Exercico>(`/api/exercicios/${relation.idExercicio}`) })));
+    const settled = await Promise.allSettled(relations.map(async (relation) => {
+      const exerciseId = relation.idExercicio ?? (typeof relation.id === 'object' ? relation.id?.idExercicio : undefined);
+      if (!Number.isFinite(exerciseId)) throw new Error('A API não informou o exercício desta série.');
+      return { relation, exercise: await request<Exercico>(`/api/exercicios/${exerciseId}`) };
+    }));
     const exercises = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
     exercises.sort((a,b) => Number(b.exercise.modalidade?.toLowerCase() === 'aquecimento') - Number(a.exercise.modalidade?.toLowerCase() === 'aquecimento'));
     return { exercises, failedCount: settled.length - exercises.length };
