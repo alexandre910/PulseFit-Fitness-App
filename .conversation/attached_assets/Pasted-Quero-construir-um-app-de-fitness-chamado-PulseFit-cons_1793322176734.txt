@@ -1,0 +1,85 @@
+Quero construir um app de fitness chamado PulseFit, consumindo uma API REST Java/Spring Boot já pronta e funcionando. NÃO crie nenhum backend, banco de dados ou lógica de negócio própria — toda a lógica (cadastro, login, treinos, agenda, exercícios, questionário) já existe na API. Seu trabalho é construir o FRONTEND que consome essa API.
+
+URL BASE DA API (temporária, via ngrok):
+https://shaded-jot-pacify.ngrok-free.dev
+
+IMPORTANTE: toda requisição para essa API precisa incluir o header abaixo, senão a resposta vem como uma página HTML de aviso em vez de JSON:
+ngrok-skip-browser-warning: true
+
+PALETA DE CORES (tema escuro):
+- Fundo: #172033
+- Texto principal: #CCCCCC
+- Cor de destaque (botões, links, ações principais): #FFA213
+- Cor para conteúdo de Musculação: #056C5C
+- Cor para conteúdo de Calistenia: #BA1650
+
+NÃO use nenhuma API externa de exercícios (nada de WorkoutX ou qualquer API de terceiros para buscar exercícios). Todos os exercícios já estão cadastrados no banco da própria API, em português, com vídeos reais do YouTube.
+
+====================
+TELAS
+====================
+
+1. LOGIN
+- Campos: email, senha.
+- Botão "Entrar" chama POST /api/clientes/login
+  Body: { "email": "...", "senha": "..." }
+  Resposta: { "cliente": { "id", "nome", "email", "senha", "nivelExperiencia", "sexo", "idade" }, "questionarioPendente": true|false }
+- Se questionarioPendente = true → redirecionar para a tela de Questionário.
+- Se questionarioPendente = false → redirecionar para Início.
+- Link para tela de Cadastro.
+
+2. CADASTRO
+- Campos: nome, email, senha, idade, sexo, nivelExperiencia (iniciante/avançado).
+- Botão "Criar conta" chama POST /api/clientes
+  Body: { "nome", "email", "senha", "idade", "sexo", "nivelExperiencia" }
+- A API valida: idade mínima 13 anos e e-mail único. Se der erro (400), exibir a mensagem retornada.
+- Após cadastro OK, redirecionar para Login (ou já logar automaticamente chamando o login).
+
+3. QUESTIONÁRIO (só aparece pra quem é "iniciante" e ainda não respondeu)
+- Formulário simples perguntando frequência de treino por semana (ex: "quantos dias por semana você quer treinar?"), objetivo, nível de experiência, etc.
+- Botão "Enviar" chama POST /api/questionarios
+  Body: { "idUsuario": <id do cliente>, "frequencia": "<texto, ex: '3 dias por semana'>", ... outros campos que a API aceitar }
+- A API gera automaticamente os treinos da pessoa com base na resposta. Após enviar, redirecionar para Início.
+
+4. INÍCIO (Dashboard)
+- Tela de boas-vindas com nome do usuário.
+- Resumo rápido: próximos treinos agendados, progresso geral.
+- Atalhos para as telas de Treinos, Agenda, Exercícios, Perfil.
+
+5. TREINOS
+- Lista os treinos do usuário: GET /api/treinos (filtrar os que pertencem ao idUsuario logado)
+- Cada treino tem: nome, descrição, modalidade (Musculacao/Calistenia), nível.
+- Ao abrir um treino, buscar os exercícios dele: GET /api/treinos/{id}/exercicios
+  Resposta: lista de { idTreino, idExercicio, series, repeticoes, carga }
+  Use o idExercicio pra buscar os detalhes de cada exercício (nome, descrição, vídeo) em GET /api/exercicios/{id}
+- IMPORTANTE: todo treino tem 3 exercícios de aquecimento obrigatórios (modalidade "Aquecimento") que devem aparecer SEMPRE no topo da lista, antes dos exercícios principais, destacados visualmente como "Aquecimento".
+- Cor do card do treino: verde (#056C5C) se modalidade Musculacao, rosa (#BA1650) se Calistenia.
+
+6. AGENDA
+- Lista os agendamentos do usuário: GET /api/agenda?idUsuario=<id>
+  Resposta: lista de { id, dataAgendada, status, idUsuario, idTreino, liberado }
+- "liberado": true significa que o usuário pode iniciar/marcar esse treino agendado. Se liberado = false, o item deve aparecer bloqueado/desabilitado visualmente (ex: cadeado, opacidade reduzida) — isso significa que o treino anterior na sequência ainda não foi concluído.
+- Botão "Agendar novo treino": POST /api/agenda
+  Body: { "idUsuario", "idTreino", "dataAgendada" (ISO, ex "2026-11-05T08:00:00") }
+  A API só permite agendar até 30 dias no futuro — se der erro 400, exibir a mensagem.
+- Botão "Marcar como concluído" num item liberado: PATCH /api/agenda/{id}/status
+  Body: { "status": "CONCLUIDO" }
+  Isso libera o próximo agendamento da sequência automaticamente.
+
+7. EXERCÍCIOS
+- Lista geral: GET /api/exercicios
+- Tela de busca/filtro por nome ou grupo muscular.
+- Cada exercício tem: nome, grupoMuscular, descricao, demonstracaoVideo (link do YouTube), modalidade (Musculacao/Calistenia/Aquecimento), nivel (iniciante/avancado/vazio).
+  - Exercícios de Calistenia têm nivel vazio — significa que servem para qualquer nível, não filtrar por nível nesse caso.
+- Ao abrir o detalhe do exercício, mostrar um botão "Ver execução" que abre o link do YouTube (demonstracaoVideo) — pode ser embed ou abrir em nova aba/navegador.
+
+8. PERFIL
+- Mostrar dados do cliente logado: GET /api/clientes/{id} → nome, email, idade, sexo, nivelExperiencia.
+- Opção de logout (volta pra tela de Login, limpa dados salvos localmente).
+
+====================
+OBSERVAÇÕES GERAIS
+====================
+- Gerenciar sessão simples: salvar o "cliente" retornado no login localmente (localStorage/AsyncStorage) e usar o id dele nas chamadas que pedem idUsuario.
+- Tratar erros HTTP (400, 404) exibindo a mensagem de erro retornada pela API de forma amigável.
+- Essa API ainda não tem criptografia de senha nem autenticação por token — é só uso de estudo/faculdade, não precisa implementar OAuth ou JWT.

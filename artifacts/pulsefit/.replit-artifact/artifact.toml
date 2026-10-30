@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "PulseFit"
+description = "A responsive fitness coaching app for Portuguese-speaking users to manage workouts, schedules, exercises, onboarding, and profile through their existing REST API."
+version = "1.0.0"
+id = "artifacts/pulsefit"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23659
+
+[services.development]
+run = "pnpm --filter @workspace/pulsefit run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pulsefit", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pulsefit/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23659"
+BASE_PATH = "/"

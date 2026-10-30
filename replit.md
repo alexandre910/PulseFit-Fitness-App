@@ -1,44 +1,47 @@
-# [Project name]
+# PulseFit
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+PulseFit is a Portuguese-language fitness app for managing training plans, schedules, exercises, and user profiles through an existing REST API.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/pulsefit run dev` — run the PulseFit frontend
+- `pnpm --filter @workspace/pulsefit run typecheck` — check the frontend types
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Optional frontend env: `VITE_API_BASE_URL` — upstream REST API base URL. Defaults to the temporary ngrok URL supplied for this app.
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite + TypeScript
+- Upstream REST API: existing Java/Spring Boot service; frontend sends `ngrok-skip-browser-warning: true`
+- Session: browser localStorage, without storing the returned password
+- PulseFit does not own a backend, database, or business logic
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/pulsefit/src/App.tsx` — application screens and navigation
+- `artifacts/pulsefit/src/lib/api.ts` — upstream API requests, response types, and local session
+- `artifacts/pulsefit/src/index.css` — PulseFit theme and responsive styles
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Do not add a PulseFit backend or database; all business logic and stored data belong to the existing Spring Boot API.
+- Do not fetch exercise content from third-party APIs; use the upstream API's exercise endpoints and videos.
+- Keep the upstream API base configurable because the provided ngrok URL is temporary.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can sign in or register, complete beginner onboarding, browse their workouts and exercises, schedule and complete sessions, and view their profile.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Use the existing API as the single source of truth for accounts, questionnaires, training plans, exercises, and schedules.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Every upstream API request must include `ngrok-skip-browser-warning: true`.
+- The temporary ngrok URL may be offline or change; update `VITE_API_BASE_URL` when the tunnel changes.
+- CORS on the upstream API must allow the frontend origin and the custom ngrok warning header.
 
 ## Pointers
 
