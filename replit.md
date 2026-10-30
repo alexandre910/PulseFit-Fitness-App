@@ -28,6 +28,8 @@ PulseFit is a Portuguese-language fitness app for managing training plans, sched
 - Do not add a PulseFit backend or database; all business logic and stored data belong to the existing Spring Boot API.
 - Do not fetch exercise content from third-party APIs; use the upstream API's exercise endpoints and videos.
 - Keep the upstream API base configurable because the provided ngrok URL is temporary.
+- Do not set up paid Replit AI integrations. The nutrition assistant will call the user's forthcoming Gemini endpoint on their Java backend; its API key stays on that backend.
+- Keep all new assistant UI frontend-only in PulseFit; use the Java API for voice, training, and exercise data.
 
 ## Product
 

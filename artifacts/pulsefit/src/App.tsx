@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import NotFound from '@/pages/not-found';
+import CostinhaAssistant from '@/components/costinha-assistant';
+import costinhaAvatarVideo from '@assets/Movimento_5_segundos_1793363630411.mp4?url';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 20_000, refetchOnWindowFocus: false } } });
 const navItems = [
@@ -302,6 +304,6 @@ function RoutedApp() {
   </Switch>;
 }
 function App() {
-  return <QueryClientProvider client={queryClient}><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><RoutedApp /></WouterRouter></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><RoutedApp /><CostinhaAssistant avatarVideoUrl={costinhaAvatarVideo} /></WouterRouter></QueryClientProvider>;
 }
 export default App;

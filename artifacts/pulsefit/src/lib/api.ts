@@ -48,6 +48,30 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   return payload as T;
 }
 
+export async function requestAudio(path: string, init: RequestInit = {}): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...(init.headers || {}) },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiError('Não foi possível conectar ao áudio do Costinha. Tente novamente.', 0);
+  }
+  if (!response.ok) {
+    const raw = await response.text();
+    let payload: any;
+    try { payload = raw ? JSON.parse(raw) : undefined; } catch { payload = undefined; }
+    const plainText = raw && !raw.trim().startsWith('<') ? raw : '';
+    const message = payload?.message || payload?.mensagem || payload?.error || plainText || `A API de voz respondeu com um erro (HTTP ${response.status}).`;
+    throw new ApiError(String(message), response.status);
+  }
+  const audio = await response.blob();
+  if (!audio.size) throw new ApiError('A API de voz retornou um áudio vazio.', response.status);
+  return audio;
+}
+
 const CLIENT_KEY = 'pulsefit-cliente';
 const QUESTIONNAIRE_KEY = 'pulsefit-questionario-pendente';
 export function getCliente(): Cliente | null {

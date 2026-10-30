@@ -134,6 +134,84 @@ a { color: inherit; text-decoration: none; }
 .workout-card { overflow:hidden; border:1px solid rgba(204,204,204,.1); border-radius:16px; transition:transform .2s,border-color .2s; }
 .workout-card:hover { transform:translateY(-3px); border-color:rgba(255,162,19,.35); }
 
+/* Costinha — a compact training-room conversation, anchored in PulseFit's palette. */
+.costinha-root { position:fixed; z-index:80; right:24px; bottom:24px; font-family:var(--app-font-sans); }
+.costinha-panel { position:absolute; right:0; bottom:76px; display:flex; flex-direction:column; width:min(420px,calc(100vw - 36px)); height:min(690px,calc(100dvh - 124px)); min-height:380px; overflow:hidden; border:1px solid rgba(255,162,19,.24); border-radius:22px; background:linear-gradient(145deg,#202c42 0%,#19253a 100%); box-shadow:0 24px 80px rgba(3,9,20,.55),0 0 0 1px rgba(255,255,255,.025) inset; animation:costinha-enter .25s ease-out both; }
+.costinha-header { display:flex; align-items:center; gap:13px; padding:17px 18px; border-bottom:1px solid rgba(204,204,204,.09); background:rgba(15,25,42,.38); }
+.costinha-headcopy { min-width:0; flex:1; }
+.costinha-eyebrow { display:block; color:#e7a638; font:700 9px 'Space Mono',monospace; letter-spacing:.13em; }
+.costinha-headcopy h2 { display:flex; align-items:center; gap:9px; margin:2px 0 0; color:#f0f0e9; font:700 23px/.95 'Barlow Condensed',sans-serif; letter-spacing:.01em; }
+.costinha-headcopy p { margin:5px 0 0; color:#96a1b3; font-size:11px; }
+.costinha-online { width:7px; height:7px; border-radius:50%; background:#45b89c; box-shadow:0 0 0 3px rgba(69,184,156,.12); }
+.costinha-icon-button { display:grid; width:36px; height:36px; place-items:center; border:1px solid rgba(204,204,204,.12); border-radius:11px; color:#c8cfda; background:#202d42; transition:transform .18s,background .18s; }
+.costinha-icon-button:hover { transform:translateY(-2px); background:#2a3952; }
+.costinha-avatar { position:relative; display:grid; flex:none; overflow:hidden; place-items:center; border-radius:50%; background:radial-gradient(circle at 35% 27%,#ffe3a2 0 7%,#d99a48 8% 22%,#894c41 48%,#26384c 70%); }
+.costinha-avatar:before { position:absolute; inset:5px; border:1px solid rgba(255,237,190,.65); border-radius:50%; content:''; }
+.costinha-avatar-small { width:45px; height:45px; box-shadow:0 0 0 3px rgba(255,162,19,.12); }
+.costinha-avatar-chat { width:27px; height:27px; margin:2px 0 0; }
+.costinha-avatar-launch { width:44px; height:44px; box-shadow:0 0 0 2px rgba(255,230,169,.65); }
+.costinha-avatar video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.costinha-face { position:relative; width:64%; height:72%; border-radius:48% 48% 43% 43%; background:linear-gradient(150deg,#f4c879,#bc7546); box-shadow:inset 0 -5px 0 rgba(91,47,44,.22); animation:costinha-bob 3.8s ease-in-out infinite; }
+.costinha-face:before { position:absolute; left:-13%; right:-13%; top:-11%; height:35%; border-radius:50% 50% 24% 24%; background:#312d36; content:''; }
+.costinha-face span { position:absolute; left:25%; top:44%; width:4px; height:4px; border-radius:50%; background:#292b32; box-shadow:13px 0 #292b32; }
+.costinha-face i { position:absolute; left:37%; top:64%; width:9px; height:4px; border-bottom:1.5px solid #843f3b; border-radius:50%; }
+.costinha-face b { position:absolute; left:24%; top:78%; width:52%; height:13%; border-radius:0 0 50% 50%; background:#eecc83; }
+.costinha-messages { display:flex; flex:1; flex-direction:column; gap:14px; overflow-y:auto; padding:18px 15px 20px; overscroll-behavior:contain; scrollbar-color:#44526a transparent; scrollbar-width:thin; }
+.costinha-message-row { display:flex; align-items:flex-start; gap:8px; animation:costinha-enter .2s ease-out both; }
+.costinha-message-row.from-user { justify-content:flex-end; }
+.costinha-bubble { width:fit-content; max-width:calc(100% - 37px); padding:11px 13px; border:1px solid rgba(204,204,204,.075); border-radius:4px 16px 16px 16px; color:#d9dee7; background:#27354b; }
+.costinha-bubble p { margin:0; font-size:13px; line-height:1.58; white-space:pre-wrap; }
+.costinha-bubble.user-bubble { max-width:82%; border-color:rgba(255,162,19,.13); border-radius:16px 4px 16px 16px; color:#202638; background:#efa52d; }
+.costinha-chip-row,.costinha-action-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.costinha-chip,.costinha-action-row button { display:inline-flex; min-height:35px; align-items:center; justify-content:center; gap:7px; padding:7px 10px; border:1px solid rgba(255,162,19,.3); border-radius:10px; color:#f0bd63; background:rgba(255,162,19,.07); font-size:11px; font-weight:700; transition:transform .17s,border-color .17s,background .17s; }
+.costinha-chip:hover:not(:disabled),.costinha-action-row button:hover:not(:disabled) { transform:translateY(-2px); border-color:#ffa213; background:rgba(255,162,19,.15); }
+.costinha-chip:disabled,.costinha-action-row button:disabled { cursor:wait; opacity:.5; }
+.costinha-action-row button { padding:9px 11px; border-color:rgba(57,169,148,.33); color:#79cbb7; background:rgba(5,108,92,.17); }
+.costinha-retry { display:inline-flex; align-items:center; gap:6px; margin-top:9px; padding:5px 0; border:0; color:#ffb5c7; background:transparent; font-size:11px; font-weight:700; }
+.costinha-retry:disabled { opacity:.5; }
+.costinha-audio-note { margin:0 0 0 35px; color:#a0aaba; font-size:10px; line-height:1.4; }
+.costinha-loading { display:flex; align-items:center; gap:4px; margin-left:35px; color:#9ba7b9; font-size:10px; }
+.costinha-loading span { width:5px; height:5px; border-radius:50%; background:#55b7a1; animation:costinha-pulse .9s ease-in-out infinite alternate; }
+.costinha-loading span:nth-child(2) { animation-delay:.18s; }.costinha-loading span:nth-child(3) { animation-delay:.36s; }
+.costinha-loading em { margin-left:5px; font-style:normal; }
+.costinha-footer { display:flex; align-items:center; gap:7px; padding:11px 17px calc(11px + env(safe-area-inset-bottom,0px)); border-top:1px solid rgba(204,204,204,.08); color:#7d8b9f; font-size:10px; }
+.costinha-footer svg { color:#dca343; }
+.costinha-exercise-list { display:grid; gap:8px; width:min(310px,100%); margin-top:10px; }
+.costinha-exercise-card { padding:11px; border:1px solid rgba(204,204,204,.09); border-radius:13px; background:rgba(14,24,41,.42); }
+.costinha-exercise-heading { display:flex; align-items:center; gap:9px; }
+.costinha-exercise-mark { display:grid; width:29px; height:29px; flex:none; place-items:center; border-radius:9px; color:#63c4ad; background:rgba(5,108,92,.25); }
+.costinha-exercise-heading h3 { margin:0; color:#f1f0e9; font-size:12px; font-weight:700; }
+.costinha-exercise-heading span:not(.costinha-exercise-mark) { display:block; margin-top:3px; color:#a3afbd; font:9px 'Space Mono',monospace; }
+.costinha-exercise-card > p { margin:9px 0 0; color:#b9c2ce; font-size:11px; line-height:1.5; }
+.costinha-exercise-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-top:9px; color:#99a6b7; font-size:10px; }
+.costinha-exercise-meta > span { padding:3px 7px; border-radius:20px; color:#dfa949; background:rgba(255,162,19,.09); }
+.costinha-exercise-meta a { display:inline-flex; align-items:center; gap:5px; color:#72c9b5; font-weight:700; }
+.costinha-exercise-meta a:hover { text-decoration:underline; }
+.costinha-workout-results { display:grid; gap:13px; margin-top:11px; }
+.costinha-workout-results section { display:grid; gap:6px; }
+.costinha-section-label { display:flex; align-items:center; gap:6px; margin:0; color:#e5ae4e; font:700 10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
+.costinha-workout-results .costinha-exercise-list { margin-top:0; }
+.costinha-empty { margin-top:10px; padding:11px; border:1px dashed rgba(204,204,204,.17); border-radius:11px; color:#b8c1cd; font-size:11px; line-height:1.5; }
+.costinha-no-main { margin:0; color:#a7b1bf; font-size:11px; line-height:1.5; }
+.costinha-launcher { display:flex; min-height:62px; align-items:center; gap:11px; padding:8px 14px 8px 9px; border:1px solid rgba(255,220,157,.35); border-radius:999px; color:#222b3e; background:linear-gradient(135deg,#ffbd50,#f29a1e); box-shadow:0 8px 32px rgba(5,10,20,.42),0 3px 12px rgba(255,162,19,.18); transition:transform .2s,box-shadow .2s; }
+.costinha-launcher:hover { transform:translateY(-3px); box-shadow:0 12px 36px rgba(5,10,20,.48),0 5px 16px rgba(255,162,19,.23); }
+.costinha-launcher.launcher-open { width:58px; height:58px; min-height:58px; justify-content:center; padding:0; border-color:rgba(204,204,204,.2); color:#d9dee7; background:#25334a; }
+.costinha-launch-label { font-size:12px; font-weight:800; letter-spacing:.005em; }
+.costinha-launch-icon { margin-left:1px; }
+@keyframes costinha-enter { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:translateY(0); } }
+@keyframes costinha-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2px); } }
+@keyframes costinha-pulse { from { opacity:.4; transform:translateY(0); } to { opacity:1; transform:translateY(-3px); } }
+@media(max-width:767px) {
+  .costinha-root { right:14px; bottom:calc(78px + env(safe-area-inset-bottom,0px)); }
+  .costinha-panel { position:fixed; right:8px; bottom:calc(145px + env(safe-area-inset-bottom,0px)); width:calc(100vw - 16px); height:min(690px,calc(100dvh - 175px - env(safe-area-inset-bottom,0px))); min-height:330px; border-radius:20px; }
+  .costinha-launcher { min-height:56px; gap:9px; padding:6px 12px 6px 7px; }
+  .costinha-avatar-launch { width:42px; height:42px; }
+  .costinha-launch-label { font-size:11px; }
+}
+@media(max-height:560px) and (max-width:767px) {
+  .costinha-panel { bottom:calc(82px + env(safe-area-inset-bottom,0px)); height:calc(100dvh - 96px - env(safe-area-inset-bottom,0px)); }
+}
+
 @media (max-width: 767px) {
   .page-wrap { padding: 27px 18px 108px; }
   .main-with-nav { margin-left:0; }
