@@ -213,7 +213,8 @@ function Agenda() {
     const date = new Date(values.dataAgendada);
     if (date > maxDate || date < new Date(today.toDateString())) { setError('Escolha uma data entre hoje e os próximos 30 dias.'); return; }
     try {
-      await request('/api/agenda', { method: 'POST', body: JSON.stringify({ idUsuario: cliente.id, idTreino: Number(values.idTreino), dataAgendada: date.toISOString() }) });
+      const localDateTime = values.dataAgendada.length === 16 ? `${values.dataAgendada}:00` : values.dataAgendada;
+      await request('/api/agenda', { method: 'POST', body: JSON.stringify({ idUsuario: cliente.id, idTreino: Number(values.idTreino), dataAgendada: localDateTime }) });
       setNotice('Treino adicionado à sua agenda.'); form.reset({ idTreino: '', dataAgendada: '' }); setShowForm(false); await query.refetch();
     } catch (e) { setError(friendlyError(e)); }
   }
