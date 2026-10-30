@@ -147,7 +147,7 @@ a { color: inherit; text-decoration: none; }
 .costinha-icon-button:hover { transform:translateY(-2px); background:#2a3952; }
 .costinha-avatar { position:relative; display:grid; flex:none; overflow:hidden; place-items:center; border-radius:50%; background:radial-gradient(circle at 35% 27%,#ffe3a2 0 7%,#d99a48 8% 22%,#894c41 48%,#26384c 70%); }
 .costinha-avatar:before { position:absolute; inset:5px; border:1px solid rgba(255,237,190,.65); border-radius:50%; content:''; }
-.costinha-avatar-small { width:45px; height:45px; box-shadow:0 0 0 3px rgba(255,162,19,.12); }
+.costinha-avatar-small { width:64px; height:64px; box-shadow:0 0 0 3px rgba(255,162,19,.12); }
 .costinha-avatar-chat { width:27px; height:27px; margin:2px 0 0; }
 .costinha-avatar-launch { width:44px; height:44px; box-shadow:0 0 0 2px rgba(255,230,169,.65); }
 .costinha-avatar video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
