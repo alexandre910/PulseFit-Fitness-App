@@ -1,13 +1,70 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Activity, ArrowRight, Dumbbell, ExternalLink, HeartPulse, MessageCircle, RotateCcw, Sparkles, X } from 'lucide-react';
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { Activity, ArrowRight, Dumbbell, ExternalLink, HeartPulse, RotateCcw, Sparkles, X } from 'lucide-react';
 import { asArray, Exercico, friendlyError, getCliente, RelacaoExercicio, request, requestAudio, Treino } from '@/lib/api';
+import { useLocation } from 'wouter';
 
 type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'exercises' | 'workout';
 type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; warmups?: Exercico[]; mains?: Exercico[]; error?: boolean };
 type Props = { avatarVideoUrl?: string };
+type LauncherPosition = { x: number; y: number };
+type LauncherDrag = { pointerId: number; startX: number; startY: number; origin: LauncherPosition; moved: boolean };
 
 const GREETING = 'Olá, como posso ajudá-lo! Sou seu assistente virtual Costinha e ajudo com informação sobre nutrição, musculação ou calistenia.';
 const GROUPS = [{ label: 'Peito', api: 'Peito' }, { label: 'Perna', api: 'Perna' }, { label: 'Braço', api: 'Braco' }, { label: 'Costas', api: 'Costas' }];
+const POSITION_STORAGE_KEY = 'pulsefit-costinha-position-v2';
+const LAUNCHER_SIZE = 58;
+
+function clampLauncherPosition(position: LauncherPosition, width: number, height: number, path: string): LauncherPosition {
+  const mobile = width <= 767;
+  const edge = mobile ? 14 : 24;
+  const bottom = mobile && !['/login', '/cadastro'].includes(path) ? 96 : mobile ? 20 : 24;
+  const minX = edge;
+  const maxX = Math.max(minX, width - LAUNCHER_SIZE - edge);
+  const minY = 12;
+  const maxY = Math.max(minY, height - LAUNCHER_SIZE - bottom);
+  return {
+    x: Math.round(Math.min(maxX, Math.max(minX, position.x))),
+    y: Math.round(Math.min(maxY, Math.max(minY, position.y))),
+  };
+}
+
+function defaultLauncherPosition(width: number, height: number, path: string): LauncherPosition {
+  const mobile = width <= 767;
+  const edge = mobile ? 14 : 24;
+  const authPage = ['/login', '/cadastro'].includes(path);
+  if (mobile && authPage) {
+    return clampLauncherPosition({ x: width - LAUNCHER_SIZE - edge, y: edge }, width, height, path);
+  }
+  const bottom = mobile ? 96 : 24;
+  return clampLauncherPosition(
+    { x: width - LAUNCHER_SIZE - edge, y: height - LAUNCHER_SIZE - bottom },
+    width,
+    height,
+    path,
+  );
+}
+
+function loadLauncherPosition(path: string): { position: LauncherPosition; customized: boolean } {
+  if (typeof window === 'undefined') return { position: { x: 24, y: 24 }, customized: false };
+  try {
+    const saved = window.localStorage.getItem(POSITION_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<LauncherPosition>;
+      if (Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
+        return {
+          position: clampLauncherPosition({ x: parsed.x!, y: parsed.y! }, window.innerWidth, window.innerHeight, path),
+          customized: true,
+        };
+      }
+    }
+  } catch { /* Use the safe default when local storage is unavailable or invalid. */ }
+
+  return { position: defaultLauncherPosition(window.innerWidth, window.innerHeight, path), customized: false };
+}
+
+function persistLauncherPosition(position: LauncherPosition) {
+  try { window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position)); } catch { /* Keep the drag usable if storage is blocked. */ }
+}
 
 function records<T,>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
@@ -46,7 +103,10 @@ function normalized(value: string) {
 }
 
 export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
+  const [path] = useLocation();
   const [open, setOpen] = useState(false);
+  const [initialPosition] = useState(() => loadLauncherPosition(path));
+  const [position, setPosition] = useState<LauncherPosition>(initialPosition.position);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [audioUnavailable, setAudioUnavailable] = useState(false);
@@ -59,7 +119,26 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
   const retryRef = useRef<(() => void) | null>(null);
+  const positionRef = useRef(position);
+  const positionCustomizedRef = useRef(initialPosition.customized);
+  const dragRef = useRef<LauncherDrag | null>(null);
+  const suppressClickRef = useRef(false);
   openRef.current = open;
+  positionRef.current = position;
+
+  useEffect(() => {
+    const keepPositionInBounds = () => {
+      const next = positionCustomizedRef.current
+        ? clampLauncherPosition(positionRef.current, window.innerWidth, window.innerHeight, path)
+        : defaultLauncherPosition(window.innerWidth, window.innerHeight, path);
+      positionRef.current = next;
+      setPosition(next);
+      if (positionCustomizedRef.current) persistLauncherPosition(next);
+    };
+    keepPositionInBounds();
+    window.addEventListener('resize', keepPositionInBounds);
+    return () => window.removeEventListener('resize', keepPositionInBounds);
+  }, [path]);
 
   const stopAudio = useCallback(() => {
     controllersRef.current.forEach(controller => controller.abort());
@@ -220,7 +299,47 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     retryRef.current?.();
   };
 
-  return <div className="costinha-root" data-testid="costinha-assistant">
+  const handleLauncherPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 && event.pointerType !== 'touch') return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: positionRef.current,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleLauncherPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) > 5) drag.moved = true;
+    if (!drag.moved) return;
+    event.preventDefault();
+    positionCustomizedRef.current = true;
+    suppressClickRef.current = true;
+    const next = clampLauncherPosition(
+      { x: drag.origin.x + deltaX, y: drag.origin.y + deltaY },
+      window.innerWidth,
+      window.innerHeight,
+      path,
+    );
+    positionRef.current = next;
+    setPosition(next);
+  };
+  const finishLauncherDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (!drag.moved) return;
+    persistLauncherPosition(positionRef.current);
+    suppressClickRef.current = true;
+    window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+  };
+
+  return <div className="costinha-root" style={{ left: position.x, top: position.y }} data-testid="costinha-assistant">
     {open && <section className="costinha-panel" role="dialog" aria-modal="false" aria-labelledby="costinha-title" data-testid="dialog-costinha">
       <header className="costinha-header">
         <div className="costinha-avatar costinha-avatar-small" aria-hidden="true" data-testid="img-avatar-costinha-header">
@@ -256,8 +375,27 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       </div>
       <footer className="costinha-footer"><Sparkles size={14} /><span>Informação para acompanhar o seu ritmo</span></footer>
     </section>}
-    <button className={`costinha-launcher ${open ? 'launcher-open' : ''}`} type="button" onClick={open ? close : launch} aria-label={open ? 'Fechar Costinha' : 'Abrir Costinha'} aria-expanded={open} data-testid="button-open-costinha">
-      {open ? <X size={22} /> : <><span className="costinha-avatar costinha-avatar-launch" data-testid="img-avatar-costinha-launch">{avatarVideoUrl ? <video src={avatarVideoUrl} muted loop autoPlay playsInline /> : <div className="costinha-face"><span /><i /><b /></div>}</span><span className="costinha-launch-label">Fale com o Costinha</span><MessageCircle className="costinha-launch-icon" size={17} /></>}
+    <button
+      className={`costinha-launcher ${open ? 'launcher-open' : ''}`}
+      type="button"
+      onClick={event => {
+        if (suppressClickRef.current) {
+          event.preventDefault();
+          suppressClickRef.current = false;
+          return;
+        }
+        open ? close() : launch();
+      }}
+      onPointerDown={handleLauncherPointerDown}
+      onPointerMove={handleLauncherPointerMove}
+      onPointerUp={finishLauncherDrag}
+      onPointerCancel={finishLauncherDrag}
+      onDragStart={event => event.preventDefault()}
+      aria-label={open ? 'Arraste ou feche o Costinha' : 'Arraste ou abra o Costinha'}
+      aria-expanded={open}
+      data-testid="button-open-costinha"
+    >
+      {open ? <X size={22} /> : <span className="costinha-avatar costinha-avatar-launch" data-testid="img-avatar-costinha-launch">{avatarVideoUrl ? <video src={avatarVideoUrl} muted loop autoPlay playsInline /> : <div className="costinha-face"><span /><i /><b /></div>}</span>}
     </button>
   </div>;
 }

@@ -135,7 +135,7 @@ a { color: inherit; text-decoration: none; }
 .workout-card:hover { transform:translateY(-3px); border-color:rgba(255,162,19,.35); }
 
 /* Costinha — a compact training-room conversation, anchored in PulseFit's palette. */
-.costinha-root { position:fixed; z-index:80; right:24px; bottom:24px; font-family:var(--app-font-sans); }
+.costinha-root { position:fixed; z-index:80; font-family:var(--app-font-sans); }
 .costinha-panel { position:absolute; right:0; bottom:76px; display:flex; flex-direction:column; width:min(420px,calc(100vw - 36px)); height:min(690px,calc(100dvh - 124px)); min-height:380px; overflow:hidden; border:1px solid rgba(255,162,19,.24); border-radius:22px; background:linear-gradient(145deg,#202c42 0%,#19253a 100%); box-shadow:0 24px 80px rgba(3,9,20,.55),0 0 0 1px rgba(255,255,255,.025) inset; animation:costinha-enter .25s ease-out both; }
 .costinha-header { display:flex; align-items:center; gap:13px; padding:17px 18px; border-bottom:1px solid rgba(204,204,204,.09); background:rgba(15,25,42,.38); }
 .costinha-headcopy { min-width:0; flex:1; }
@@ -193,20 +193,16 @@ a { color: inherit; text-decoration: none; }
 .costinha-workout-results .costinha-exercise-list { margin-top:0; }
 .costinha-empty { margin-top:10px; padding:11px; border:1px dashed rgba(204,204,204,.17); border-radius:11px; color:#b8c1cd; font-size:11px; line-height:1.5; }
 .costinha-no-main { margin:0; color:#a7b1bf; font-size:11px; line-height:1.5; }
-.costinha-launcher { display:flex; min-height:62px; align-items:center; gap:11px; padding:8px 14px 8px 9px; border:1px solid rgba(255,220,157,.35); border-radius:999px; color:#222b3e; background:linear-gradient(135deg,#ffbd50,#f29a1e); box-shadow:0 8px 32px rgba(5,10,20,.42),0 3px 12px rgba(255,162,19,.18); transition:transform .2s,box-shadow .2s; }
-.costinha-launcher:hover { transform:translateY(-3px); box-shadow:0 12px 36px rgba(5,10,20,.48),0 5px 16px rgba(255,162,19,.23); }
+.costinha-launcher { display:grid; width:58px; height:58px; min-height:58px; place-items:center; padding:5px; border:1px solid rgba(255,220,157,.35); border-radius:50%; color:#222b3e; background:linear-gradient(135deg,#ffbd50,#f29a1e); box-shadow:0 8px 32px rgba(5,10,20,.42),0 3px 12px rgba(255,162,19,.18); cursor:grab; touch-action:none; user-select:none; transition:box-shadow .2s; }
+.costinha-launcher:hover { box-shadow:0 12px 36px rgba(5,10,20,.48),0 5px 16px rgba(255,162,19,.23); }
+.costinha-launcher:active { cursor:grabbing; }
 .costinha-launcher.launcher-open { width:58px; height:58px; min-height:58px; justify-content:center; padding:0; border-color:rgba(204,204,204,.2); color:#d9dee7; background:#25334a; }
-.costinha-launch-label { font-size:12px; font-weight:800; letter-spacing:.005em; }
-.costinha-launch-icon { margin-left:1px; }
 @keyframes costinha-enter { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:translateY(0); } }
 @keyframes costinha-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2px); } }
 @keyframes costinha-pulse { from { opacity:.4; transform:translateY(0); } to { opacity:1; transform:translateY(-3px); } }
 @media(max-width:767px) {
-  .costinha-root { right:14px; bottom:calc(78px + env(safe-area-inset-bottom,0px)); }
   .costinha-panel { position:fixed; right:8px; bottom:calc(145px + env(safe-area-inset-bottom,0px)); width:calc(100vw - 16px); height:min(690px,calc(100dvh - 175px - env(safe-area-inset-bottom,0px))); min-height:330px; border-radius:20px; }
-  .costinha-launcher { min-height:56px; gap:9px; padding:6px 12px 6px 7px; }
-  .costinha-avatar-launch { width:42px; height:42px; }
-  .costinha-launch-label { font-size:11px; }
+  .costinha-avatar-launch { width:46px; height:46px; }
 }
 @media(max-height:560px) and (max-width:767px) {
   .costinha-panel { bottom:calc(82px + env(safe-area-inset-bottom,0px)); height:calc(100dvh - 96px - env(safe-area-inset-bottom,0px)); }
