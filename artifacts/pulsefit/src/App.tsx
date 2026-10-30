@@ -83,7 +83,7 @@ function Login() {
       <FormField control={form.control} name="senha" rules={{ required: 'Informe sua senha.' }} render={({ field }) => <FormItem><FormLabel className="label">Senha</FormLabel><FormControl><Input className="field" type="password" autoComplete="current-password" placeholder="Sua senha" data-testid="input-senha" {...field} /></FormControl><FormMessage /></FormItem>} />
       <Button disabled={busy} className="btn btn-primary w-full" type="submit" data-testid="button-login">{busy ? 'Entrando…' : 'Entrar na minha conta'}<ArrowRight size={17} className="ml-2" /></Button>
     </form></Form>
-    <p className="mt-6 text-center text-sm text-[#9ca6b6]">Ainda não tem conta? <Link href="/cadastro" className="font-bold text-[#FFA213]" data-testid="link-cadastro">Criar cadastro</Link></p>
+    <p className="mt-6 text-center text-sm text-[#9ca6b6]">Ainda não tem conta? <Link href="/cadastro" className="font-bold" style={{ color: '#FFA213' }} data-testid="link-cadastro">Criar cadastro</Link></p>
   </div></AuthLayout>;
 }
 function Cadastro() {
@@ -107,7 +107,7 @@ function Cadastro() {
       <FormField control={form.control} name="nivelExperiencia" rules={{ required: 'Selecione seu nível.' }} render={({ field: f }) => <FormItem><FormLabel className="label">Experiência</FormLabel><FormControl><select {...f} className="field" data-testid="select-nivel"><option value="">Selecione</option><option value="iniciante">Iniciante</option><option value="avançado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
       <Button disabled={busy} className="btn btn-primary w-full" type="submit" data-testid="button-cadastro">{busy ? 'Criando conta…' : 'Criar minha conta'}<ArrowRight size={17} className="ml-2" /></Button>
     </form></Form>
-    <p className="mt-5 text-center text-sm text-[#9ca6b6]">Já tem conta? <Link href="/login" className="font-bold text-[#FFA213]" data-testid="link-login">Entrar</Link></p>
+    <p className="mt-5 text-center text-sm text-[#9ca6b6]">Já tem conta? <Link href="/login" className="font-bold" style={{ color: '#FFA213' }} data-testid="link-login">Entrar</Link></p>
   </div></AuthLayout>;
 }
 function Questionario() {
