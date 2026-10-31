@@ -129,14 +129,20 @@ function Questionario() {
     </form></Form>
   </div></div></Protected>;
 }
-function useTreinos(cliente: Cliente | null) {
-  return useQuery({ queryKey: ['treinos', cliente?.id], enabled: !!cliente, queryFn: async () => {
-    const data = await request<unknown>('/api/treinos');
-    const clienteId = Number(cliente?.id);
-    return listFrom<Treino>(data, 'treinos').filter((item) =>
-      Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
-    );
-  } });
+function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
+  return useQuery({
+    queryKey: ['treinos', cliente?.id],
+    enabled: !!cliente,
+    staleTime: alwaysFresh ? 0 : undefined,
+    refetchOnMount: alwaysFresh ? 'always' : undefined,
+    queryFn: async () => {
+      const data = await request<unknown>('/api/treinos');
+      const clienteId = Number(cliente?.id);
+      return listFrom<Treino>(data, 'treinos').filter((item) =>
+        Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
+      );
+    },
+  });
 }
 function suggestedWorkoutName(existingCount: number) {
   let letterIndex = Math.max(0, existingCount) + 1;
@@ -147,6 +153,11 @@ function suggestedWorkoutName(existingCount: number) {
     letterIndex = Math.floor(letterIndex / 26);
   }
   return `Treino ${letters}`;
+}
+function exerciseIdFromRelation(relation: RelacaoExercicio) {
+  const rawId = relation.idExercicio ?? (typeof relation.id === 'object' ? relation.id?.idExercicio : undefined);
+  const id = Number(rawId);
+  return Number.isFinite(id) ? id : undefined;
 }
 function useAgenda(cliente: Cliente | null) {
   return useQuery({ queryKey: ['agenda', cliente?.id], enabled: !!cliente, queryFn: async () => listFrom<AgendaItem>(await request<unknown>(`/api/agenda?idUsuario=${cliente?.id}`), 'agenda') });
@@ -160,6 +171,99 @@ function WorkoutCard({ workout }: { workout: Treino }) {
   return <Link href={`/treinos/${workout.id}`} className="workout-card panel block" data-testid={`card-treino-${workout.id}`}>
     <div className="h-1.5" style={{ backgroundColor: color }} /><div className="p-5"><div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><ChevronRight size={18} className="text-[#8994a6]" /></div><h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3><p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p><div className="mt-4 flex items-center gap-2 text-xs text-[#a9b2c0]"><span className="tag">{workout.nivel || 'Nível flexível'}</span></div></div>
   </Link>;
+}
+function ExerciseBuilder({ workout }: { workout: Treino }) {
+  const [groupMuscular, setGroupMuscular] = useState('');
+  const [modality, setModality] = useState('');
+  const [selectedExercise, setSelectedExercise] = useState<Exercico | null>(null);
+  const [addedExerciseIds, setAddedExerciseIds] = useState<Set<number>>(() => new Set());
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const form = useForm<{ series: string; repeticoes: string; carga: string }>({
+    defaultValues: { series: '3', repeticoes: '10', carga: '' },
+  });
+  const params = new URLSearchParams();
+  if (groupMuscular) params.set('grupoMuscular', groupMuscular);
+  if (modality) params.set('modalidade', modality);
+  const exerciseQuery = useQuery({
+    queryKey: ['exercicios-builder', groupMuscular, modality],
+    enabled: true,
+    queryFn: async () => {
+      const suffix = params.toString();
+      const data = await request<unknown>(`/api/exercicios${suffix ? `?${suffix}` : ''}`);
+      return listFrom<Exercico>(data, 'exercicios');
+    },
+  });
+  const relationQuery = useQuery({
+    queryKey: ['treino-exercicios', workout.id],
+    queryFn: async () => {
+      const data = await request<unknown>(`/api/treinos/${workout.id}/exercicios`);
+      const relations = listFrom<RelacaoExercicio>(data, 'exercicios');
+      const resolved = await Promise.all(relations.map(async (relation) => {
+        const id = exerciseIdFromRelation(relation);
+        if (!id) return { relation, exercise: null };
+        try { return { relation, exercise: await request<Exercico>(`/api/exercicios/${id}`) }; }
+        catch { return { relation, exercise: null }; }
+      }));
+      return resolved;
+    },
+  });
+  const existingIds = new Set([
+    ...addedExerciseIds,
+    ...(relationQuery.data || []).map(({ relation }) => exerciseIdFromRelation(relation)).filter((id): id is number => id !== undefined),
+  ]);
+  async function addExercise(values: { series: string; repeticoes: string; carga: string }) {
+    if (!selectedExercise) return;
+    setSaving(true); setError(''); setNotice('');
+    const exercise = selectedExercise;
+    try {
+      await request<void>(`/api/treinos/${workout.id}/exercicios`, {
+        method: 'POST',
+        body: JSON.stringify({
+          idExercicio: exercise.id,
+          series: Number(values.series),
+          repeticoes: values.repeticoes.trim(),
+          carga: values.carga.trim(),
+        }),
+      });
+      setAddedExerciseIds((current) => new Set(current).add(exercise.id));
+      setSelectedExercise(null);
+      form.reset({ series: '3', repeticoes: '10', carga: '' });
+      setNotice(`${exercise.nome} foi adicionado ao treino.`);
+      const refreshed = await relationQuery.refetch();
+      if (refreshed.error) setError('O exercício foi enviado, mas a lista de exercícios do treino não atualizou. Recarregue para conferir.');
+    } catch (cause) { setError(friendlyError(cause)); }
+    finally { setSaving(false); }
+  }
+  return <section className="panel mb-6 p-5 sm:p-6" data-testid={`panel-montar-treino-${workout.id}`}>
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">TREINO CRIADO</p><h2 className="display mt-1 text-3xl uppercase">Monte {workout.nome}</h2><p className="mt-2 text-sm text-[#9ca6b6]">Os exercícios de aquecimento já foram vinculados pela API. Escolha os exercícios principais abaixo, um por vez.</p></div><span className="tag">{workout.modalidade || 'Modalidade'}</span></div>
+    {error && <div className="error-box mb-4" role="alert" data-testid="status-adicionar-exercicio-error">{error}</div>}
+    {notice && <div className="mb-4 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-adicionar-exercicio-success">{notice}</div>}
+    <div className="mb-5 grid gap-3 sm:grid-cols-2">
+      <div><label className="label" htmlFor={`filter-exercise-group-${workout.id}`}>Grupo muscular</label><select id={`filter-exercise-group-${workout.id}`} className="field" value={groupMuscular} onChange={(event) => setGroupMuscular(event.target.value)} data-testid="select-filtro-grupo-exercicio"><option value="">Todos os grupos</option><option value="Peito">Peito</option><option value="Perna">Perna</option><option value="Braco">Braço</option><option value="Costas">Costas</option></select></div>
+      <div><label className="label" htmlFor={`filter-exercise-modality-${workout.id}`}>Modalidade</label><select id={`filter-exercise-modality-${workout.id}`} className="field" value={modality} onChange={(event) => setModality(event.target.value)} data-testid="select-filtro-modalidade-exercicio"><option value="">Todas as modalidades</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></div>
+    </div>
+    {selectedExercise && <div className="panel-soft mb-5 p-4">
+      <h3 className="display text-xl uppercase">Definir {selectedExercise.nome}</h3>
+      <Form {...form}><form onSubmit={form.handleSubmit(addExercise)} className="mt-4 grid gap-3 sm:grid-cols-3">
+        <FormField control={form.control} name="series" rules={{ required: 'Informe as séries.', min: { value: 1, message: 'Use pelo menos uma série.' } }} render={({ field }) => <FormItem><FormLabel className="label">Séries</FormLabel><FormControl><Input {...field} type="number" min="1" step="1" className="field" data-testid="input-exercicio-series" /></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="repeticoes" rules={{ required: 'Informe as repetições.' }} render={({ field }) => <FormItem><FormLabel className="label">Repetições</FormLabel><FormControl><Input {...field} className="field" placeholder="10 ou 8–12" data-testid="input-exercicio-repeticoes" /></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="carga" rules={{ required: 'Informe a carga ou “Peso corporal”.' }} render={({ field }) => <FormItem><FormLabel className="label">Carga</FormLabel><FormControl><Input {...field} className="field" placeholder="Ex.: 20 kg ou peso corporal" data-testid="input-exercicio-carga" /></FormControl><FormMessage /></FormItem>} />
+        <div className="flex flex-wrap gap-3 sm:col-span-3"><Button type="submit" disabled={saving} className="btn btn-primary" data-testid="button-salvar-exercicio">{saving ? 'Adicionando…' : 'Adicionar exercício'}</Button><Button type="button" disabled={saving} className="btn btn-quiet" onClick={() => setSelectedExercise(null)}>Cancelar</Button></div>
+      </form></Form>
+    </div>}
+    <div className="mb-6">
+      <h3 className="display mb-3 text-2xl uppercase">Exercícios do treino</h3>
+      {relationQuery.isLoading ? <PageLoading label="Carregando exercícios do treino" /> : relationQuery.error ? <ErrorState message={friendlyError(relationQuery.error)} retry={() => relationQuery.refetch()} /> : relationQuery.data?.length ? <div className="space-y-2">{relationQuery.data.map(({ relation, exercise }, index) => <div className="panel-soft flex flex-wrap items-center justify-between gap-3 p-3" key={`${exercise?.id ?? exerciseIdFromRelation(relation) ?? 'exercise'}-${index}`}><div><p className="font-semibold text-[#e0e3e8]">{exercise?.nome || 'Exercício vinculado'}</p><p className="text-xs text-[#9ca6b6]">{exercise?.modalidade?.toLowerCase() === 'aquecimento' ? 'Aquecimento automático' : 'Exercício principal'} · {relation.series ?? '—'} séries · {relation.repeticoes ?? '—'} repetições · {relation.carga || 'Carga não informada'}</p></div>{exercise?.grupoMuscular && <span className="tag">{exercise.grupoMuscular}</span>}</div>)}</div> : <p className="rounded-xl border border-[#344057] p-4 text-sm text-[#9ca6b6]">Nenhum exercício foi retornado para este treino.</p>}
+    </div>
+    <div><h3 className="display mb-3 text-2xl uppercase">Biblioteca de exercícios</h3>
+      {exerciseQuery.isLoading ? <PageLoading label="Carregando biblioteca de exercícios" /> : exerciseQuery.error ? <ErrorState message={friendlyError(exerciseQuery.error)} retry={() => exerciseQuery.refetch()} /> : exerciseQuery.data?.length ? <div className="grid gap-3 sm:grid-cols-2">{exerciseQuery.data.map((exercise) => {
+        const alreadyAdded = existingIds.has(Number(exercise.id));
+        return <article className="panel-soft flex flex-col justify-between gap-3 p-4" key={exercise.id} data-testid={`card-biblioteca-exercicio-${exercise.id}`}><div><div className="flex flex-wrap gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span></div><h4 className="display mt-3 text-xl uppercase">{exercise.nome}</h4><p className="mt-1 text-sm text-[#9ca6b6]">{exercise.descricao || 'Descrição não informada.'}</p></div><Button type="button" disabled={alreadyAdded || saving} className={alreadyAdded ? 'btn btn-quiet' : 'btn btn-primary'} onClick={() => { setSelectedExercise(exercise); setError(''); setNotice(''); form.reset({ series: '3', repeticoes: '10', carga: '' }); }} data-testid={`button-escolher-exercicio-${exercise.id}`}>{alreadyAdded ? 'Já adicionado' : 'Escolher exercício'}</Button></article>;
+      })}</div> : <p className="rounded-xl border border-[#344057] p-4 text-sm text-[#9ca6b6]">Nenhum exercício encontrado para esses filtros.</p>}
+    </div>
+  </section>;
 }
 function Inicio() {
   const cliente = useCliente(); const workouts = useTreinos(cliente); const agenda = useAgenda(cliente);
@@ -184,6 +288,7 @@ function Inicio() {
 function Treinos() {
   const cliente = useCliente(); const query = useTreinos(cliente);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createNotice, setCreateNotice] = useState('');
@@ -209,6 +314,7 @@ function Treinos() {
       };
       const created = await request<Treino>('/api/treinos', { method: 'POST', body: JSON.stringify(body) });
       if (!created?.id) throw new Error('A API não confirmou a criação do treino.');
+      setBuildingWorkout(created);
       const refreshed = await query.refetch();
       setShowCreateForm(false);
       form.reset({ nome: '', descricao: '', modalidade: '', nivel: '' });
@@ -231,6 +337,7 @@ function Treinos() {
         <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
       </form></Form>
     </div>}
+    {buildingWorkout && <ExerciseBuilder workout={buildingWorkout} />}
     {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
   </div>;
 }
@@ -265,7 +372,7 @@ function TreinoDetalhe() {
   </div>;
 }
 function Agenda() {
-  const cliente = useCliente(); const query = useAgenda(cliente); const treinos = useTreinos(cliente);
+  const cliente = useCliente(); const query = useAgenda(cliente); const treinos = useTreinos(cliente, true);
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busyId, setBusyId] = useState<number | null>(null); const [showForm, setShowForm] = useState(false);
   const today = new Date(); const maxDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const form = useForm<{ idTreino: string; dataAgendada: string }>({ defaultValues: { idTreino: '', dataAgendada: '' } });
