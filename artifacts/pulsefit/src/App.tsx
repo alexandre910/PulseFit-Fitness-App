@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Plus, Search, UserRound, Video, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Plus, Search, Trash2, UserRound, Video, X } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import NotFound from '@/pages/not-found';
@@ -166,13 +167,23 @@ function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
 }
-function WorkoutCard({ workout }: { workout: Treino }) {
+function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
-  return <Link href={`/treinos/${workout.id}`} className="workout-card panel block" data-testid={`card-treino-${workout.id}`}>
-    <div className="h-1.5" style={{ backgroundColor: color }} /><div className="p-5"><div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><ChevronRight size={18} className="text-[#8994a6]" /></div><h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3><p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p><div className="mt-4 flex items-center gap-2 text-xs text-[#a9b2c0]"><span className="tag">{workout.nivel || 'Nível flexível'}</span></div></div>
-  </Link>;
+  return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
+    <div className="h-1.5" style={{ backgroundColor: color }} />
+    <div className="p-5">
+      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]"><ChevronRight size={18} /></span></div>
+      <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
+        <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
+      </Link>
+      <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
+        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2 text-[#ff8a8a]" aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={16} /><span className="text-xs">Excluir</span></Button>}
+      </div>
+    </div>
+  </article>;
 }
-function ExerciseBuilder({ workout }: { workout: Treino }) {
+function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Cliente }) {
   const [groupMuscular, setGroupMuscular] = useState('');
   const [modality, setModality] = useState('');
   const [selectedExercise, setSelectedExercise] = useState<Exercico | null>(null);
@@ -180,6 +191,11 @@ function ExerciseBuilder({ workout }: { workout: Treino }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleNotice, setScheduleNotice] = useState('');
+  const [scheduling, setScheduling] = useState(false);
   const form = useForm<{ series: string; repeticoes: string; carga: string }>({
     defaultValues: { series: '3', repeticoes: '10', carga: '' },
   });
@@ -213,6 +229,33 @@ function ExerciseBuilder({ workout }: { workout: Treino }) {
     ...addedExerciseIds,
     ...(relationQuery.data || []).map(({ relation }) => exerciseIdFromRelation(relation)).filter((id): id is number => id !== undefined),
   ]);
+  const scheduleNow = new Date();
+  const scheduleMin = new Date(scheduleNow.getTime() - scheduleNow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const scheduleMaxDate = new Date(scheduleNow.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const scheduleMax = new Date(scheduleMaxDate.getTime() - scheduleMaxDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  async function scheduleWorkout(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScheduleError(''); setScheduleNotice('');
+    if (!scheduledFor) { setScheduleError('Escolha uma data e horário.'); return; }
+    const chosenDate = new Date(scheduledFor);
+    if (chosenDate < new Date(scheduleNow.toDateString()) || chosenDate > scheduleMaxDate) {
+      setScheduleError('Escolha uma data entre hoje e os próximos 30 dias.');
+      return;
+    }
+    setScheduling(true);
+    try {
+      const localDateTime = scheduledFor.length === 16 ? `${scheduledFor}:00` : scheduledFor;
+      await request('/api/agenda', {
+        method: 'POST',
+        body: JSON.stringify({ idUsuario: cliente.id, idTreino: workout.id, dataAgendada: localDateTime }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['agenda', cliente.id] });
+      setScheduleNotice(`${workout.nome} foi agendado.`);
+      setShowScheduleForm(false);
+      setScheduledFor('');
+    } catch (cause) { setScheduleError(friendlyError(cause)); }
+    finally { setScheduling(false); }
+  }
   async function addExercise(values: { series: string; repeticoes: string; carga: string }) {
     if (!selectedExercise) return;
     setSaving(true); setError(''); setNotice('');
@@ -263,6 +306,18 @@ function ExerciseBuilder({ workout }: { workout: Treino }) {
         return <article className="panel-soft flex flex-col justify-between gap-3 p-4" key={exercise.id} data-testid={`card-biblioteca-exercicio-${exercise.id}`}><div><div className="flex flex-wrap gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span></div><h4 className="display mt-3 text-xl uppercase">{exercise.nome}</h4><p className="mt-1 text-sm text-[#9ca6b6]">{exercise.descricao || 'Descrição não informada.'}</p></div><Button type="button" disabled={alreadyAdded || saving} className={alreadyAdded ? 'btn btn-quiet' : 'btn btn-primary'} onClick={() => { setSelectedExercise(exercise); setError(''); setNotice(''); form.reset({ series: '3', repeticoes: '10', carga: '' }); }} data-testid={`button-escolher-exercicio-${exercise.id}`}>{alreadyAdded ? 'Já adicionado' : 'Escolher exercício'}</Button></article>;
       })}</div> : <p className="rounded-xl border border-[#344057] p-4 text-sm text-[#9ca6b6]">Nenhum exercício encontrado para esses filtros.</p>}
     </div>
+     <div className="panel-soft mt-6 p-4 sm:p-5" data-testid={`panel-agendar-treino-${workout.id}`}>
+       <div className="flex flex-wrap items-center justify-between gap-3">
+         <div><h3 className="display text-2xl uppercase">Próximo passo</h3><p className="mt-1 text-sm text-[#9ca6b6]">Quando terminar de montar, você pode agendar este treino agora ou fazer isso depois pela Agenda.</p></div>
+         <Button type="button" className="btn btn-primary inline-flex items-center" onClick={() => { setShowScheduleForm((open) => !open); setScheduleError(''); }} data-testid="button-agendar-treino-criado"><CalendarDays size={16} className="mr-2" />{showScheduleForm ? 'Fechar agendamento' : 'Agendar este treino'}</Button>
+       </div>
+       {scheduleError && <div className="error-box mt-4" role="alert" data-testid="status-agendar-treino-error">{scheduleError}</div>}
+       {scheduleNotice && <div className="mt-4 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agendar-treino-success">{scheduleNotice} <Link href="/agenda" className="ml-1 font-bold text-[#FFA213] underline">Ver agenda</Link></div>}
+       {showScheduleForm && <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={scheduleWorkout}>
+         <div><label className="label" htmlFor={`schedule-workout-${workout.id}`}>Data e horário</label><Input id={`schedule-workout-${workout.id}`} type="datetime-local" min={scheduleMin} max={scheduleMax} value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} className="field" data-testid="input-data-agendar-treino-criado" /></div>
+         <Button type="submit" disabled={scheduling} className="btn btn-primary" data-testid="button-confirmar-agendamento-criado">{scheduling ? 'Agendando…' : 'Confirmar agendamento'}</Button>
+       </form>}
+     </div>
   </section>;
 }
 function Inicio() {
@@ -281,7 +336,7 @@ function Inicio() {
       <section className="relative mb-7 overflow-hidden rounded-[20px] border border-[#ffa21335] bg-[#202b40] p-6 sm:p-9"><div className="absolute -right-12 -top-12 h-56 w-56 rounded-full border border-[#ffa21326] shadow-[0_0_0_24px_#ffa21308,0_0_0_56px_#ffa21305]" /><div className="relative z-10 max-w-xl"><p className="eyebrow">SEU PRÓXIMO MOVIMENTO</p><h2 className="display mt-2 text-4xl uppercase leading-[.92] sm:text-6xl">{upcoming ? agendaTrain?.nome || 'Treino na agenda' : 'Construa sua consistência.'}</h2><p className="mt-3 max-w-md text-sm text-[#9ca6b6]">{upcoming ? `Sua sessão está marcada para ${new Date(upcoming.dataAgendada).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}.` : 'Escolha um treino e marque na sua agenda. O progresso é feito de pequenos começos.'}</p><Link href={upcoming ? '/agenda' : '/treinos'} className="btn btn-primary mt-5 inline-flex items-center" data-testid="link-proximo-passo">{upcoming ? 'Ver minha agenda' : 'Encontrar meu treino'}<ArrowRight size={16} className="ml-2" /></Link></div><div className="absolute bottom-5 right-8 hidden text-[#FFA213] opacity-80 sm:block"><Flame size={76} strokeWidth={1} /></div></section>
       <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#056C5C33] text-[#6ad8bd]"><Dumbbell size={19} /></span><div><p className="text-xs text-[#95a0b1]">TREINOS DISPONÍVEIS</p><p className="display text-3xl">{workouts.data?.length ?? 0}</p></div></div></div><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFA21320] text-[#FFA213]"><CalendarDays size={19} /></span><div><p className="text-xs text-[#95a0b1]">SESSÕES NA AGENDA</p><p className="display text-3xl">{agenda.data?.filter((item) => item.status !== 'CONCLUIDO').length ?? 0}</p></div></div></div><div className="panel-soft p-5" data-testid="card-progresso-agenda"><div className="flex items-center justify-between gap-3"><div><p className="text-xs text-[#95a0b1]">PROGRESSO DA AGENDA</p><p className="display text-3xl" data-testid="text-progresso-geral">{progressPercent}%</p></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#BA165022] text-[#ff82a8]"><Check size={19} /></span></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#344057]"><div className="h-full rounded-full bg-[#FFA213] transition-all" style={{ width: `${progressPercent}%` }} /></div><p className="mt-2 text-xs text-[#95a0b1]">{completedSessions} de {totalSessions} sessões concluídas</p></div></div>
       <div className="mb-4 flex items-end justify-between"><div><p className="eyebrow">FEITO PARA VOCÊ</p><h2 className="display mt-1 text-3xl uppercase">Seus treinos</h2></div><Link href="/treinos" className="text-sm font-bold text-[#FFA213]" data-testid="link-ver-treinos">Ver todos <ArrowRight size={14} className="inline" /></Link></div>
-      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
+      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} canDelete={false} onDelete={() => {}} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
     </div>}
   </div>;
 }
@@ -289,6 +344,10 @@ function Treinos() {
   const cliente = useCliente(); const query = useTreinos(cliente);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Treino | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteNotice, setDeleteNotice] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createNotice, setCreateNotice] = useState('');
@@ -325,8 +384,26 @@ function Treinos() {
     } catch (error) { setCreateError(friendlyError(error)); }
     finally { setCreating(false); }
   }
+  async function deleteWorkout() {
+    if (!deleteTarget) return;
+    setDeleting(true); setDeleteError('');
+    const workoutId = deleteTarget.id;
+    try {
+      await request(`/api/treinos/${workoutId}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['treinos', cliente?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['treino-detail', workoutId] }),
+        queryClient.invalidateQueries({ queryKey: ['agenda', cliente?.id] }),
+      ]);
+      setDeleteNotice(`Treino “${deleteTarget.nome}” excluído.`);
+    } catch (cause) { setDeleteError(friendlyError(cause)); }
+    finally { setDeleting(false); }
+  }
   return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância."><Button type="button" disabled={query.isLoading || !!query.error} className="btn btn-primary inline-flex items-center" onClick={openCreateForm} data-testid="button-abrir-criar-treino"><Plus size={16} className="mr-2" />Novo treino</Button></Heading>
     {createError && <div className="error-box mb-5" role="alert" data-testid="status-criar-treino-error">{createError}</div>}
+    {deleteError && <div className="error-box mb-5" role="alert" data-testid="status-excluir-treino-error">{deleteError}</div>}
+    {deleteNotice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-excluir-treino-success">{deleteNotice}</div>}
     {createNotice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-criar-treino-success">{createNotice}</div>}
     {showCreateForm && <div className="panel mb-6 p-5 sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><div><p className="eyebrow">NOVO PLANO</p><h2 className="display mt-1 text-3xl uppercase">Criar treino</h2></div><button type="button" className="btn btn-quiet p-2" onClick={() => setShowCreateForm(false)} aria-label="Fechar formulário" data-testid="button-fechar-criar-treino"><X size={18} /></button></div>
       <Form {...form}><form onSubmit={form.handleSubmit(create)} className="grid gap-4 sm:grid-cols-2">
@@ -337,8 +414,14 @@ function Treinos() {
         <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
       </form></Form>
     </div>}
-    {buildingWorkout && <ExerciseBuilder workout={buildingWorkout} />}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Number(t.idUsuarioAvancado) === Number(cliente?.id)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+      <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
+        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel disabled={deleting} className="btn btn-quiet">Cancelar</AlertDialogCancel><Button type="button" disabled={deleting} className="btn btn-primary bg-[#a83232] text-white hover:bg-[#8e2929]" onClick={deleteWorkout} data-testid="button-confirmar-excluir-treino">{deleting ? 'Excluindo…' : 'Excluir treino'}</Button></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>;
 }
 function TreinoDetalhe() {
