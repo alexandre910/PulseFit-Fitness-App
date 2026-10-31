@@ -132,7 +132,10 @@ function Questionario() {
 function useTreinos(cliente: Cliente | null) {
   return useQuery({ queryKey: ['treinos', cliente?.id], enabled: !!cliente, queryFn: async () => {
     const data = await request<unknown>('/api/treinos');
-    return listFrom<Treino>(data, 'treinos').filter((item) => Number(item.idUsuario) === Number(cliente?.id));
+    const clienteId = Number(cliente?.id);
+    return listFrom<Treino>(data, 'treinos').filter((item) =>
+      Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
+    );
   } });
 }
 function useAgenda(cliente: Cliente | null) {
@@ -212,11 +215,16 @@ function Agenda() {
   async function create(values: { idTreino: string; dataAgendada: string }) {
     if (!cliente) return;
     setError(''); setNotice('');
+    const idTreino = Number(values.idTreino);
+    if (!Number.isInteger(idTreino) || !treinos.data?.some((treino) => Number(treino.id) === idTreino)) {
+      setError('Selecione um treino disponível para sua conta.');
+      return;
+    }
     const date = new Date(values.dataAgendada);
     if (date > maxDate || date < new Date(today.toDateString())) { setError('Escolha uma data entre hoje e os próximos 30 dias.'); return; }
     try {
       const localDateTime = values.dataAgendada.length === 16 ? `${values.dataAgendada}:00` : values.dataAgendada;
-      await request('/api/agenda', { method: 'POST', body: JSON.stringify({ idUsuario: cliente.id, idTreino: Number(values.idTreino), dataAgendada: localDateTime }) });
+      await request('/api/agenda', { method: 'POST', body: JSON.stringify({ idUsuario: cliente.id, idTreino, dataAgendada: localDateTime }) });
       setNotice('Treino adicionado à sua agenda.'); form.reset({ idTreino: '', dataAgendada: '' }); setShowForm(false); await query.refetch();
     } catch (e) { setError(friendlyError(e)); }
   }
@@ -235,7 +243,7 @@ function Agenda() {
       <FormField control={form.control} name="dataAgendada" rules={{ required: 'Escolha uma data e horário.' }} render={({ field }) => <FormItem><FormLabel className="label">Data e horário</FormLabel><FormControl><Input {...field} type="datetime-local" min={minInput} max={maxInput} className="field" data-testid="input-agenda-data" /></FormControl><FormMessage /></FormItem>} />
       <Button type="submit" disabled={!treinos.data?.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
     </form></Form></div>}
-    {(query.isLoading || treinos.isLoading) ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : !ordered.length ? <EmptyState title="Sua agenda está livre." body="Escolha um treino e reserve um momento para você." action={<button className="btn btn-primary" onClick={() => setShowForm(true)} data-testid="button-agendar-vazio">Agendar um treino</button>} /> : <div className="space-y-3">{ordered.map((item) => {
+     {(query.isLoading || treinos.isLoading) ? <PageLoading /> : query.error || treinos.error ? <ErrorState message={friendlyError(query.error || treinos.error)} retry={() => { query.refetch(); treinos.refetch(); }} /> : !ordered.length ? <EmptyState title="Sua agenda está livre." body="Escolha um treino e reserve um momento para você." action={<button className="btn btn-primary" onClick={() => setShowForm(true)} data-testid="button-agendar-vazio">Agendar um treino</button>} /> : <div className="space-y-3">{ordered.map((item) => {
       const workout = treinos.data?.find((t) => t.id === item.idTreino);
       const completed = item.status === 'CONCLUIDO'; const locked = !item.liberado && !completed;
       return <article className={`panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center ${locked ? 'opacity-65' : ''}`} key={item.id} data-testid={`card-agenda-${item.id}`}>
