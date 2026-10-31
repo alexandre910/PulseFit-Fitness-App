@@ -138,14 +138,6 @@ function useTreinos(cliente: Cliente | null) {
     );
   } });
 }
-async function createQuickWorkout(cliente: Cliente): Promise<Treino> {
-  const treino = await request<Treino>('/api/treinos/rapido', {
-    method: 'POST',
-    body: JSON.stringify({ idUsuario: cliente.id }),
-  });
-  if (!treino?.id) throw new Error('A API não confirmou a criação do treino.');
-  return treino;
-}
 function useAgenda(cliente: Cliente | null) {
   return useQuery({ queryKey: ['agenda', cliente?.id], enabled: !!cliente, queryFn: async () => listFrom<AgendaItem>(await request<unknown>(`/api/agenda?idUsuario=${cliente?.id}`), 'agenda') });
 }
@@ -181,22 +173,8 @@ function Inicio() {
 }
 function Treinos() {
   const cliente = useCliente(); const query = useTreinos(cliente);
-  const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState('');
-  async function addQuickWorkout() {
-    if (!cliente) return;
-    setCreating(true); setCreateError('');
-    try {
-      const created = await createQuickWorkout(cliente);
-      const refreshed = await query.refetch();
-      if (!refreshed.data?.some((workout) => Number(workout.id) === Number(created.id))) {
-        throw new Error('O treino foi criado, mas a API não o vinculou à sua conta. Confira o vínculo no backend.');
-      }
-    } catch (error) { setCreateError(friendlyError(error)); }
-    finally { setCreating(false); }
-  }
   return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância." />
-    {createError && <div className="error-box mb-5" role="alert" data-testid="status-criar-treino-error">{createError}</div>}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Crie um treino rápido com os exercícios disponíveis para vinculá-lo à sua conta e poder agendá-lo." action={<Button type="button" disabled={creating} className="btn btn-primary" onClick={() => void addQuickWorkout()} data-testid="button-criar-treino-rapido">{creating ? 'Criando treino…' : 'Criar treino rápido'}</Button>} />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
   </div>;
 }
 function TreinoDetalhe() {
@@ -231,7 +209,7 @@ function TreinoDetalhe() {
 }
 function Agenda() {
   const cliente = useCliente(); const query = useAgenda(cliente); const treinos = useTreinos(cliente);
-  const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busyId, setBusyId] = useState<number | null>(null); const [showForm, setShowForm] = useState(false); const [creatingWorkout, setCreatingWorkout] = useState(false);
+  const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busyId, setBusyId] = useState<number | null>(null); const [showForm, setShowForm] = useState(false);
   const today = new Date(); const maxDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const form = useForm<{ idTreino: string; dataAgendada: string }>({ defaultValues: { idTreino: '', dataAgendada: '' } });
   async function create(values: { idTreino: string; dataAgendada: string }) {
@@ -250,20 +228,6 @@ function Agenda() {
       setNotice('Treino adicionado à sua agenda.'); form.reset({ idTreino: '', dataAgendada: '' }); setShowForm(false); await query.refetch();
     } catch (e) { setError(friendlyError(e)); }
   }
-  async function createQuickWorkoutForAgenda() {
-    if (!cliente) return;
-    setError(''); setNotice(''); setCreatingWorkout(true);
-    try {
-      const created = await createQuickWorkout(cliente);
-      const refreshed = await treinos.refetch();
-      if (!refreshed.data?.some((workout) => Number(workout.id) === Number(created.id))) {
-        throw new Error('O treino foi criado, mas a API não o vinculou à sua conta. Confira o vínculo no backend.');
-      }
-      form.setValue('idTreino', String(created.id), { shouldValidate: true });
-      setNotice(`${created.nome || 'Treino rápido'} criado e selecionado. Escolha a data para agendá-lo.`);
-    } catch (e) { setError(friendlyError(e)); }
-    finally { setCreatingWorkout(false); }
-  }
   async function complete(item: AgendaItem) {
     setBusyId(item.id); setError(''); setNotice('');
     try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await query.refetch(); }
@@ -275,8 +239,7 @@ function Agenda() {
   return <div className="page-wrap"><Heading kicker="RITMO E CONSTÂNCIA" title="Sua agenda" detail="Planeje seu próximo encontro com o movimento."><button className="btn btn-primary inline-flex items-center justify-center" onClick={() => setShowForm((v) => !v)} data-testid="button-novo-agendamento">{showForm ? <X size={16} className="mr-2" /> : <CalendarDays size={16} className="mr-2" />}{showForm ? 'Fechar' : 'Agendar treino'}</button></Heading>
     {error && <div className="error-box mb-5" role="alert" data-testid="status-agenda-error">{error}</div>}{notice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agenda-success">{notice}</div>}
     {showForm && <div className="panel mb-6 p-5 sm:p-6"><h2 className="display mb-5 text-3xl uppercase">Marque seu próximo treino</h2><Form {...form}><form className="grid gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit(create)}>
-       {(!treinos.isLoading && !treinos.error && !treinos.data?.length) && <div className="panel-soft p-4 sm:col-span-2"><p className="text-sm text-[#c1c8d3]">Sua conta ainda não tem treinos vinculados. Crie um treino rápido para ele aparecer aqui e poder ser agendado.</p><Button type="button" disabled={creatingWorkout} className="btn btn-primary mt-3" onClick={() => void createQuickWorkoutForAgenda()} data-testid="button-criar-treino-rapido-agenda">{creatingWorkout ? 'Criando treino…' : 'Criar treino rápido'}</Button></div>}
-       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} disabled={!treinos.data?.length} className="field disabled:cursor-not-allowed disabled:opacity-60" data-testid="select-agenda-treino"><option value="">{treinos.data?.length ? 'Selecione um treino' : 'Nenhum treino disponível'}</option>{treinos.data?.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
+       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" data-testid="select-agenda-treino"><option value="">Selecione um treino</option>{treinos.data?.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
       <FormField control={form.control} name="dataAgendada" rules={{ required: 'Escolha uma data e horário.' }} render={({ field }) => <FormItem><FormLabel className="label">Data e horário</FormLabel><FormControl><Input {...field} type="datetime-local" min={minInput} max={maxInput} className="field" data-testid="input-agenda-data" /></FormControl><FormMessage /></FormItem>} />
       <Button type="submit" disabled={!treinos.data?.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
     </form></Form></div>}
