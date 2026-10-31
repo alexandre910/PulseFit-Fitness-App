@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Search, UserRound, Video, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Plus, Search, UserRound, Video, X } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -138,6 +138,16 @@ function useTreinos(cliente: Cliente | null) {
     );
   } });
 }
+function suggestedWorkoutName(existingCount: number) {
+  let letterIndex = Math.max(0, existingCount) + 1;
+  let letters = '';
+  while (letterIndex > 0) {
+    letterIndex -= 1;
+    letters = String.fromCharCode(65 + (letterIndex % 26)) + letters;
+    letterIndex = Math.floor(letterIndex / 26);
+  }
+  return `Treino ${letters}`;
+}
 function useAgenda(cliente: Cliente | null) {
   return useQuery({ queryKey: ['agenda', cliente?.id], enabled: !!cliente, queryFn: async () => listFrom<AgendaItem>(await request<unknown>(`/api/agenda?idUsuario=${cliente?.id}`), 'agenda') });
 }
@@ -173,7 +183,54 @@ function Inicio() {
 }
 function Treinos() {
   const cliente = useCliente(); const query = useTreinos(cliente);
-  return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância." />
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createNotice, setCreateNotice] = useState('');
+  const form = useForm<{ nome: string; descricao: string; modalidade: string; nivel: string }>({
+    defaultValues: { nome: '', descricao: '', modalidade: '', nivel: '' },
+  });
+  function openCreateForm() {
+    setCreateError(''); setCreateNotice('');
+    form.reset({ nome: suggestedWorkoutName(query.data?.length ?? 0), descricao: '', modalidade: '', nivel: '' });
+    setShowCreateForm(true);
+  }
+  async function create(values: { nome: string; descricao: string; modalidade: string; nivel: string }) {
+    if (!cliente) return;
+    setCreating(true); setCreateError(''); setCreateNotice('');
+    try {
+      const body = {
+        nome: values.nome.trim(),
+        descricao: values.descricao.trim(),
+        modalidade: values.modalidade,
+        nivel: values.nivel || null,
+        idUsuario: cliente.id,
+        idUsuarioAvancado: cliente.id,
+      };
+      const created = await request<Treino>('/api/treinos', { method: 'POST', body: JSON.stringify(body) });
+      if (!created?.id) throw new Error('A API não confirmou a criação do treino.');
+      const refreshed = await query.refetch();
+      setShowCreateForm(false);
+      form.reset({ nome: '', descricao: '', modalidade: '', nivel: '' });
+      setCreateNotice(`Treino “${created.nome?.trim() || body.nome}” criado com sucesso.`);
+      if (refreshed.error || !refreshed.data?.some((item) => Number(item.id) === Number(created.id))) {
+        setCreateError('O treino foi criado, mas não apareceu na lista vinculada à sua conta. Confira os IDs de vínculo retornados pela API.');
+      }
+    } catch (error) { setCreateError(friendlyError(error)); }
+    finally { setCreating(false); }
+  }
+  return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância."><Button type="button" disabled={query.isLoading || !!query.error} className="btn btn-primary inline-flex items-center" onClick={openCreateForm} data-testid="button-abrir-criar-treino"><Plus size={16} className="mr-2" />Novo treino</Button></Heading>
+    {createError && <div className="error-box mb-5" role="alert" data-testid="status-criar-treino-error">{createError}</div>}
+    {createNotice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-criar-treino-success">{createNotice}</div>}
+    {showCreateForm && <div className="panel mb-6 p-5 sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><div><p className="eyebrow">NOVO PLANO</p><h2 className="display mt-1 text-3xl uppercase">Criar treino</h2></div><button type="button" className="btn btn-quiet p-2" onClick={() => setShowCreateForm(false)} aria-label="Fechar formulário" data-testid="button-fechar-criar-treino"><X size={18} /></button></div>
+      <Form {...form}><form onSubmit={form.handleSubmit(create)} className="grid gap-4 sm:grid-cols-2">
+        <FormField control={form.control} name="nome" rules={{ required: 'Informe o nome do treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Nome do treino</FormLabel><FormControl><Input {...field} className="field" placeholder="Treino A" data-testid="input-nome-treino" /></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="modalidade" rules={{ required: 'Selecione uma modalidade.' }} render={({ field }) => <FormItem><FormLabel className="label">Modalidade</FormLabel><FormControl><select {...field} className="field" data-testid="select-modalidade-treino"><option value="">Selecione uma modalidade</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="nivel" render={({ field }) => <FormItem><FormLabel className="label">Nível <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><select {...field} className="field" data-testid="select-nivel-treino"><option value="">Sem nível definido</option><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="descricao" render={({ field }) => <FormItem className="sm:col-span-2"><FormLabel className="label">Descrição <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><textarea {...field} rows={3} className="field resize-y" placeholder="Descreva o objetivo deste treino" data-testid="textarea-descricao-treino" /></FormControl><FormMessage /></FormItem>} />
+        <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
+      </form></Form>
+    </div>}
     {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
   </div>;
 }
