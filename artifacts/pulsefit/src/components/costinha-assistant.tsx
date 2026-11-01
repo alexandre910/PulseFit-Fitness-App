@@ -2,6 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef,
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, ArrowRight, Dumbbell, ExternalLink, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
 import { ApiError, asArray, Exercico, friendlyError, getCliente, request, requestAudio, Treino } from '@/lib/api';
+import ExerciseLevelBadge from '@/components/exercise-level-badge';
 import { useLocation } from 'wouter';
 
 type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'workout-period' | 'workout-time' | 'exercises';
@@ -796,9 +797,9 @@ function ExerciseCards({ items }: { items: Exercico[] }) {
     {items.map((exercise, index) => {
       const href = videoHref(exercise.demonstracaoVideo);
       return <article className="costinha-exercise-card" key={`${exercise.id ?? exercise.nome}-${index}`} data-testid={`card-exercise-${exercise.id ?? index}`}>
-        <div className="costinha-exercise-heading"><span className="costinha-exercise-mark"><Activity size={15} /></span><div><h3 data-testid={`text-exercise-name-${exercise.id ?? index}`}>{exercise.nome || 'Exercício'}</h3><span>{exercise.grupoMuscular || exercise.modalidade || 'Treino'}</span></div></div>
+        <div className="costinha-exercise-heading"><span className="costinha-exercise-mark"><Activity size={15} /></span><div><div className="costinha-exercise-title-row"><h3 data-testid={`text-exercise-name-${exercise.id ?? index}`}>{exercise.nome || 'Exercício'}</h3><ExerciseLevelBadge level={exercise.nivel} modality={exercise.modalidade} /></div><span>{exercise.grupoMuscular || exercise.modalidade || 'Treino'}</span></div></div>
         {exercise.descricao && <p data-testid={`text-exercise-description-${exercise.id ?? index}`}>{exercise.descricao}</p>}
-        <div className="costinha-exercise-meta">{exercise.nivel && <span>{exercise.nivel}</span>}{href && <a href={href} target="_blank" rel="noreferrer" data-testid={`link-exercise-video-${exercise.id ?? index}`}><ExternalLink size={13} /> Ver demonstração</a>}</div>
+        <div className="costinha-exercise-meta">{href && <a href={href} target="_blank" rel="noreferrer" data-testid={`link-exercise-video-${exercise.id ?? index}`}><ExternalLink size={13} /> Ver demonstração</a>}</div>
       </article>;
     })}
   </div>;

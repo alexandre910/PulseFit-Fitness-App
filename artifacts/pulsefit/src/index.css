@@ -192,7 +192,8 @@ a { color: inherit; text-decoration: none; }
 .costinha-exercise-heading { display:flex; align-items:center; gap:9px; }
 .costinha-exercise-mark { display:grid; width:29px; height:29px; flex:none; place-items:center; border-radius:9px; color:#63c4ad; background:rgba(5,108,92,.25); }
 .costinha-exercise-heading h3 { margin:0; color:#f1f0e9; font-size:12px; font-weight:700; }
-.costinha-exercise-heading span:not(.costinha-exercise-mark) { display:block; margin-top:3px; color:#a3afbd; font:9px 'Space Mono',monospace; }
+.costinha-exercise-title-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.costinha-exercise-heading > div > span:not(.exercise-level-badge) { display:block; margin-top:3px; color:#a3afbd; font:9px 'Space Mono',monospace; }
 .costinha-exercise-card > p { margin:9px 0 0; color:#b9c2ce; font-size:11px; line-height:1.5; }
 .costinha-exercise-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-top:9px; color:#99a6b7; font-size:10px; }
 .costinha-exercise-meta > span { padding:3px 7px; border-radius:20px; color:#dfa949; background:rgba(255,162,19,.09); }
