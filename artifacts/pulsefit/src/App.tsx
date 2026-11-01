@@ -178,7 +178,7 @@ function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDel
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
       </Link>
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
-        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2 text-[#ff8a8a]" aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={16} /><span className="text-xs">Excluir</span></Button>}
+        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={16} /><span className="text-xs">Excluir</span></Button>}
       </div>
     </div>
   </article>;
