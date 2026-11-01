@@ -183,7 +183,7 @@ function WorkoutCard({ workout, onDelete }: { workout: Treino; onDelete?: () => 
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
       </Link>
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
-        {workout.rapido && onDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir treino rápido ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={20} /><span className="text-xs">Excluir treino</span></Button>}
+        {workout.podeExcluir === true && onDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir treino ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={20} /><span className="text-xs">Excluir treino</span></Button>}
       </div>
     </div>
   </article>;
@@ -429,10 +429,10 @@ function Treinos() {
       </form></Form>
     </div>}
     {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} onDelete={t.rapido ? () => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); } : undefined} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} onDelete={t.podeExcluir === true ? () => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); } : undefined} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
     <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
       <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
-        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Deseja excluir este treino rápido?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Deseja excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel disabled={deleting} className="btn btn-quiet">Cancelar</AlertDialogCancel><Button type="button" disabled={deleting} className="btn btn-primary bg-[#a83232] text-white hover:bg-[#8e2929]" onClick={deleteWorkout} data-testid="button-confirmar-excluir-treino">{deleting ? 'Excluindo…' : 'Excluir treino'}</Button></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
