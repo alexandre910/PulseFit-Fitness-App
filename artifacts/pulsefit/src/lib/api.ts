@@ -10,7 +10,7 @@ export type Cliente = {
   idade?: number;
 };
 
-export type Treino = { id: number; nome: string; descricao?: string; modalidade?: string; nivel?: string; liberado: boolean; concluido: boolean; idUsuario?: number | string | null; idUsuarioAvancado?: number | string | null };
+export type Treino = { id: number; nome: string; descricao?: string; modalidade?: string; nivel?: string; rapido: boolean; liberado: boolean; concluido: boolean; idUsuario?: number | string | null; idUsuarioAvancado?: number | string | null };
 export type Exercico = { id: number; nome: string; grupoMuscular?: string; descricao?: string; demonstracaoVideo?: string; modalidade?: string; nivel?: string };
 export type RelacaoExercicio = {
   idTreino?: number;

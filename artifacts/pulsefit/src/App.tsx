@@ -137,8 +137,11 @@ function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
     staleTime: alwaysFresh ? 0 : undefined,
     refetchOnMount: alwaysFresh ? 'always' : undefined,
     queryFn: async () => {
-      const data = await request<unknown>(`/api/treinos/usuario/${cliente?.id}`);
-      return listFrom<Treino>(data, 'treinos');
+      const data = await request<unknown>('/api/treinos');
+      const clienteId = Number(cliente?.id);
+      return listFrom<Treino>(data, 'treinos').filter((item) =>
+        Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
+      );
     },
   });
 }
@@ -169,21 +172,18 @@ function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
 }
-function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
+function WorkoutCard({ workout, onDelete }: { workout: Treino; onDelete?: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
-  const locked = !workout.liberado;
-  const content = <>
-    <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
-    <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
-  </>;
   return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
     <div className="h-1.5" style={{ backgroundColor: color }} />
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]">{locked ? <LockKeyhole size={18} /> : <ChevronRight size={18} />}</span></div>
-      {locked ? <div className="block rounded-sm" aria-disabled="true" data-testid={`locked-treino-${workout.id}`}>{content}</div> : <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>{content}</Link>}
-      {locked && <p className="mt-3 flex items-start gap-2 text-sm font-semibold text-[#ffc66e]" role="status" data-testid={`status-treino-bloqueado-${workout.id}`}><LockKeyhole size={15} className="mt-0.5 shrink-0" />Conclua o treino anterior na agenda para liberar</p>}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>{workout.concluido && <span className="tag bg-[#056c5c] text-white" data-testid={`tag-concluido-treino-${workout.id}`}><Check size={12} className="mr-1" />Concluído</span>}</div>
-        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={25} /><span className="text-xs">Excluir</span></Button>}
+      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]"><ChevronRight size={18} /></span></div>
+      <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
+        <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
+      </Link>
+      <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
+        {workout.rapido && onDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir treino rápido ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={20} /><span className="text-xs">Excluir treino</span></Button>}
       </div>
     </div>
   </article>;
@@ -241,7 +241,6 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
   async function scheduleWorkout(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setScheduleError(''); setScheduleNotice('');
-    if (!workout.liberado) { setScheduleError('Conclua o treino anterior na agenda para liberar.'); return; }
     if (!scheduledFor) { setScheduleError('Escolha uma data e horário.'); return; }
     const chosenDate = new Date(scheduledFor);
     if (chosenDate < new Date(scheduleNow.toDateString()) || chosenDate > scheduleMaxDate) {
@@ -324,9 +323,8 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
      <div className="panel-soft mt-6 p-4 sm:p-5" data-testid={`panel-agendar-treino-${workout.id}`}>
        <div className="flex flex-wrap items-center justify-between gap-3">
          <div><h3 className="display text-2xl uppercase">Próximo passo</h3><p className="mt-1 text-sm text-[#9ca6b6]">Quando terminar de montar, você pode agendar este treino agora ou fazer isso depois pela Agenda.</p></div>
-          <Button type="button" disabled={!workout.liberado} className="btn btn-primary inline-flex items-center" onClick={() => { setShowScheduleForm((open) => !open); setScheduleError(''); }} data-testid="button-agendar-treino-criado"><CalendarDays size={16} className="mr-2" />{showScheduleForm ? 'Fechar agendamento' : 'Agendar este treino'}</Button>
+         <Button type="button" className="btn btn-primary inline-flex items-center" onClick={() => { setShowScheduleForm((open) => !open); setScheduleError(''); }} data-testid="button-agendar-treino-criado"><CalendarDays size={16} className="mr-2" />{showScheduleForm ? 'Fechar agendamento' : 'Agendar este treino'}</Button>
        </div>
-        {!workout.liberado && <p className="mt-3 flex items-start gap-2 text-sm font-semibold text-[#ffc66e]" role="status"><LockKeyhole size={15} className="mt-0.5 shrink-0" />Conclua o treino anterior na agenda para liberar</p>}
        {scheduleError && <div className="error-box mt-4" role="alert" data-testid="status-agendar-treino-error">{scheduleError}</div>}
        {scheduleNotice && <div className="mt-4 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agendar-treino-success">{scheduleNotice} <Link href="/agenda" className="ml-1 font-bold text-[#FFA213] underline">Ver agenda</Link></div>}
        {showScheduleForm && <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={scheduleWorkout}>
@@ -350,9 +348,9 @@ function Inicio() {
     {error && <ErrorState message={friendlyError(error)} retry={() => { workouts.refetch(); agenda.refetch(); }} />}
     {loading ? <PageLoading /> : <div className="enter">
       <section className="relative mb-7 overflow-hidden rounded-[20px] border border-[#ffa21335] bg-[#202b40] p-6 sm:p-9"><div className="absolute -right-12 -top-12 h-56 w-56 rounded-full border border-[#ffa21326] shadow-[0_0_0_24px_#ffa21308,0_0_0_56px_#ffa21305]" /><div className="relative z-10 max-w-xl"><p className="eyebrow">SEU PRÓXIMO MOVIMENTO</p><h2 className="display mt-2 text-4xl uppercase leading-[.92] sm:text-6xl">{upcoming ? agendaTrain?.nome || 'Treino na agenda' : 'Construa sua consistência.'}</h2><p className="mt-3 max-w-md text-sm text-[#9ca6b6]">{upcoming ? `Sua sessão está marcada para ${new Date(upcoming.dataAgendada).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}.` : 'Escolha um treino e marque na sua agenda. O progresso é feito de pequenos começos.'}</p><Link href={upcoming ? '/agenda' : '/treinos'} className="btn btn-primary mt-5 inline-flex items-center" data-testid="link-proximo-passo">{upcoming ? 'Ver minha agenda' : 'Encontrar meu treino'}<ArrowRight size={16} className="ml-2" /></Link></div><div className="absolute bottom-5 right-8 hidden text-[#FFA213] opacity-80 sm:block"><Flame size={76} strokeWidth={1} /></div></section>
-       <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#056C5C33] text-[#6ad8bd]"><Dumbbell size={19} /></span><div><p className="text-xs text-[#95a0b1]">TREINOS DISPONÍVEIS</p><p className="display text-3xl">{workouts.data?.filter((workout) => workout.liberado).length ?? 0}</p></div></div></div><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFA21320] text-[#FFA213]"><CalendarDays size={19} /></span><div><p className="text-xs text-[#95a0b1]">SESSÕES NA AGENDA</p><p className="display text-3xl">{agenda.data?.filter((item) => item.status !== 'CONCLUIDO').length ?? 0}</p></div></div></div><div className="panel-soft p-5" data-testid="card-progresso-agenda"><div className="flex items-center justify-between gap-3"><div><p className="text-xs text-[#95a0b1]">PROGRESSO DA AGENDA</p><p className="display text-3xl" data-testid="text-progresso-geral">{progressPercent}%</p></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#BA165022] text-[#ff82a8]"><Check size={19} /></span></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#344057]"><div className="h-full rounded-full bg-[#FFA213] transition-all" style={{ width: `${progressPercent}%` }} /></div><p className="mt-2 text-xs text-[#95a0b1]">{completedSessions} de {totalSessions} sessões concluídas</p></div></div>
+      <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#056C5C33] text-[#6ad8bd]"><Dumbbell size={19} /></span><div><p className="text-xs text-[#95a0b1]">TREINOS DISPONÍVEIS</p><p className="display text-3xl">{workouts.data?.length ?? 0}</p></div></div></div><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFA21320] text-[#FFA213]"><CalendarDays size={19} /></span><div><p className="text-xs text-[#95a0b1]">SESSÕES NA AGENDA</p><p className="display text-3xl">{agenda.data?.filter((item) => item.status !== 'CONCLUIDO').length ?? 0}</p></div></div></div><div className="panel-soft p-5" data-testid="card-progresso-agenda"><div className="flex items-center justify-between gap-3"><div><p className="text-xs text-[#95a0b1]">PROGRESSO DA AGENDA</p><p className="display text-3xl" data-testid="text-progresso-geral">{progressPercent}%</p></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#BA165022] text-[#ff82a8]"><Check size={19} /></span></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#344057]"><div className="h-full rounded-full bg-[#FFA213] transition-all" style={{ width: `${progressPercent}%` }} /></div><p className="mt-2 text-xs text-[#95a0b1]">{completedSessions} de {totalSessions} sessões concluídas</p></div></div>
       <div className="mb-4 flex items-end justify-between"><div><p className="eyebrow">FEITO PARA VOCÊ</p><h2 className="display mt-1 text-3xl uppercase">Seus treinos</h2></div><Link href="/treinos" className="text-sm font-bold text-[#FFA213]" data-testid="link-ver-treinos">Ver todos <ArrowRight size={14} className="inline" /></Link></div>
-      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} canDelete={false} onDelete={() => {}} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
+      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
     </div>}
   </div>;
 }
@@ -389,8 +387,8 @@ function Treinos() {
       };
       const created = await request<Treino>('/api/treinos', { method: 'POST', body: JSON.stringify(body) });
       if (!created?.id) throw new Error('A API não confirmou a criação do treino.');
+      setBuildingWorkout(created);
       const refreshed = await query.refetch();
-      setBuildingWorkout(refreshed.data?.find((item) => Number(item.id) === Number(created.id)) ?? created);
       setShowCreateForm(false);
       form.reset({ nome: '', descricao: '', modalidade: '', nivel: '' });
       setCreateNotice(`Treino “${created.nome?.trim() || body.nome}” criado com sucesso.`);
@@ -431,10 +429,10 @@ function Treinos() {
       </form></Form>
     </div>}
     {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Number(t.idUsuarioAvancado) === Number(cliente?.id)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} onDelete={t.rapido ? () => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); } : undefined} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
     <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
       <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
-        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Deseja excluir este treino rápido?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel disabled={deleting} className="btn btn-quiet">Cancelar</AlertDialogCancel><Button type="button" disabled={deleting} className="btn btn-primary bg-[#a83232] text-white hover:bg-[#8e2929]" onClick={deleteWorkout} data-testid="button-confirmar-excluir-treino">{deleting ? 'Excluindo…' : 'Excluir treino'}</Button></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -445,8 +443,7 @@ function TreinoDetalhe() {
   const cliente = useCliente();
   const isBeginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
   const treinoQuery = useTreinos(cliente);
-  const treino = treinoQuery.data?.find((item) => Number(item.id) === id);
-  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id) && !!treino?.liberado, queryFn: async () => {
+  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id), queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
     const settled = await Promise.allSettled(relations.map(async (relation) => {
       if (isBeginner) {
@@ -463,8 +460,9 @@ function TreinoDetalhe() {
     exercises.sort((a,b) => Number(b.exercise.modalidade?.toLowerCase() === 'aquecimento') - Number(a.exercise.modalidade?.toLowerCase() === 'aquecimento'));
     return { exercises, failedCount: settled.length - exercises.length };
   } });
+  const treino = treinoQuery.data?.find((item) => item.id === id);
   return <div className="page-wrap"><Link href="/treinos" className="mb-6 inline-flex items-center gap-2 text-sm text-[#9ba5b5]" data-testid="link-voltar-treinos"><ArrowLeft size={16} /> Todos os treinos</Link>
-    {treinoQuery.isLoading ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : !treino.liberado ? <EmptyState title="Treino bloqueado." body="Conclua o treino anterior na agenda para liberar." action={<Link href="/agenda" className="btn btn-quiet" data-testid="link-agenda-treino-bloqueado">Abrir agenda</Link>} /> : detail.isLoading ? <PageLoading /> : <>
+    {treinoQuery.isLoading || detail.isLoading ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : <>
       <Heading kicker="DETALHES DO TREINO" title={treino.nome} detail={treino.descricao || 'Uma sessão para avançar no seu ritmo.'}><ModalityTag value={treino.modalidade} /></Heading>
       {detail.error && <ErrorState message={friendlyError(detail.error)} retry={() => detail.refetch()} />}
       {!detail.error && detail.data?.exercises.length === 0 && <EmptyState title="Exercícios indisponíveis." body="Este treino ainda não tem exercícios cadastrados." />}
@@ -488,13 +486,8 @@ function Agenda() {
     if (!cliente) return;
     setError(''); setNotice('');
     const idTreino = Number(values.idTreino);
-    const selectedWorkout = treinos.data?.find((treino) => Number(treino.id) === idTreino);
-    if (!Number.isInteger(idTreino) || !selectedWorkout) {
+    if (!Number.isInteger(idTreino) || !treinos.data?.some((treino) => Number(treino.id) === idTreino)) {
       setError('Selecione um treino disponível para sua conta.');
-      return;
-    }
-    if (!selectedWorkout.liberado) {
-      setError('Conclua o treino anterior na agenda para liberar.');
       return;
     }
     const date = new Date(values.dataAgendada);
@@ -507,14 +500,7 @@ function Agenda() {
   }
   async function complete(item: AgendaItem) {
     setBusyId(item.id); setError(''); setNotice('');
-    try {
-      await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['agenda', cliente?.id] }),
-        queryClient.invalidateQueries({ queryKey: ['treinos', cliente?.id] }),
-      ]);
-      setNotice('Sessão concluída. A lista de treinos foi atualizada.');
-    }
+    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await query.refetch(); }
     catch (e) { setError(friendlyError(e)); } finally { setBusyId(null); }
   }
   const ordered = [...(query.data || [])].sort((a,b) => new Date(a.dataAgendada).getTime() - new Date(b.dataAgendada).getTime());
@@ -523,10 +509,9 @@ function Agenda() {
   return <div className="page-wrap"><Heading kicker="RITMO E CONSTÂNCIA" title="Sua agenda" detail="Planeje seu próximo encontro com o movimento."><button className="btn btn-primary inline-flex items-center justify-center" onClick={() => setShowForm((v) => !v)} data-testid="button-novo-agendamento">{showForm ? <X size={16} className="mr-2" /> : <CalendarDays size={16} className="mr-2" />}{showForm ? 'Fechar' : 'Agendar treino'}</button></Heading>
     {error && <div className="error-box mb-5" role="alert" data-testid="status-agenda-error">{error}</div>}{notice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agenda-success">{notice}</div>}
     {showForm && <div className="panel mb-6 p-5 sm:p-6"><h2 className="display mb-5 text-3xl uppercase">Marque seu próximo treino</h2><Form {...form}><form className="grid gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit(create)}>
-       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" data-testid="select-agenda-treino"><option value="">Selecione um treino</option>{treinos.data?.filter((t) => t.liberado).map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
-       {treinos.data?.length && !treinos.data.some((t) => t.liberado) ? <p className="text-sm text-[#ffc66e] sm:col-span-2" role="status">Conclua o treino anterior na agenda para liberar o próximo.</p> : null}
+       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" data-testid="select-agenda-treino"><option value="">Selecione um treino</option>{treinos.data?.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
       <FormField control={form.control} name="dataAgendada" rules={{ required: 'Escolha uma data e horário.' }} render={({ field }) => <FormItem><FormLabel className="label">Data e horário</FormLabel><FormControl><Input {...field} type="datetime-local" min={minInput} max={maxInput} className="field" data-testid="input-agenda-data" /></FormControl><FormMessage /></FormItem>} />
-       <Button type="submit" disabled={!treinos.data?.some((t) => t.liberado)} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
+      <Button type="submit" disabled={!treinos.data?.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
     </form></Form></div>}
      {(query.isLoading || treinos.isLoading) ? <PageLoading /> : query.error || treinos.error ? <ErrorState message={friendlyError(query.error || treinos.error)} retry={() => { query.refetch(); treinos.refetch(); }} /> : !ordered.length ? <EmptyState title="Sua agenda está livre." body="Escolha um treino e reserve um momento para você." action={<button className="btn btn-primary" onClick={() => setShowForm(true)} data-testid="button-agendar-vazio">Agendar um treino</button>} /> : <div className="space-y-3">{ordered.map((item) => {
       const workout = treinos.data?.find((t) => t.id === item.idTreino);
