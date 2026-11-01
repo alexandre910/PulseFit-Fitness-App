@@ -178,7 +178,7 @@ function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDel
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
       </Link>
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
-        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={16} /><span className="text-xs">Excluir</span></Button>}
+        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={25} /><span className="text-xs">Excluir</span></Button>}
       </div>
     </div>
   </article>;
@@ -363,6 +363,7 @@ function Treinos() {
   const form = useForm<{ nome: string; descricao: string; modalidade: string; nivel: string }>({
     defaultValues: { nome: '', descricao: '', modalidade: '', nivel: '' },
   });
+  const selectedModality = form.watch('modalidade');
   function openCreateForm() {
     setCreateError(''); setCreateNotice('');
     form.reset({ nome: suggestedWorkoutName(query.data?.length ?? 0), descricao: '', modalidade: '', nivel: '' });
@@ -417,8 +418,8 @@ function Treinos() {
     {showCreateForm && <div className="panel mb-6 p-5 sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><div><p className="eyebrow">NOVO PLANO</p><h2 className="display mt-1 text-3xl uppercase">Criar treino</h2></div><button type="button" className="btn btn-quiet p-2" onClick={() => setShowCreateForm(false)} aria-label="Fechar formulário" data-testid="button-fechar-criar-treino"><X size={18} /></button></div>
       <Form {...form}><form onSubmit={form.handleSubmit(create)} className="grid gap-4 sm:grid-cols-2">
         <FormField control={form.control} name="nome" rules={{ required: 'Informe o nome do treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Nome do treino</FormLabel><FormControl><Input {...field} className="field" placeholder="Treino A" data-testid="input-nome-treino" /></FormControl><FormMessage /></FormItem>} />
-        <FormField control={form.control} name="modalidade" rules={{ required: 'Selecione uma modalidade.' }} render={({ field }) => <FormItem><FormLabel className="label">Modalidade</FormLabel><FormControl><select {...field} className="field" data-testid="select-modalidade-treino"><option value="">Selecione uma modalidade</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></FormControl><FormMessage /></FormItem>} />
-        <FormField control={form.control} name="nivel" render={({ field }) => <FormItem><FormLabel className="label">Nível <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><select {...field} className="field" data-testid="select-nivel-treino"><option value="">Sem nível definido</option><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="modalidade" rules={{ required: 'Selecione uma modalidade.' }} render={({ field }) => <FormItem><FormLabel className="label">Modalidade</FormLabel><FormControl><select {...field} onChange={(event) => { field.onChange(event); form.setValue('nivel', event.target.value === 'Musculacao' ? 'avancado' : ''); }} className="field" data-testid="select-modalidade-treino"><option value="">Selecione uma modalidade</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></FormControl><FormMessage /></FormItem>} />
+        {selectedModality === 'Musculacao' && <FormField control={form.control} name="nivel" rules={{ required: 'O nível avançado é obrigatório para musculação.' }} render={({ field }) => <FormItem><FormLabel className="label">Nível</FormLabel><FormControl><select {...field} className="field" data-testid="select-nivel-treino"><option value="avancado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />}
         <FormField control={form.control} name="descricao" render={({ field }) => <FormItem className="sm:col-span-2"><FormLabel className="label">Descrição <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><textarea {...field} rows={3} className="field resize-y" placeholder="Descreva o objetivo deste treino" data-testid="textarea-descricao-treino" /></FormControl><FormMessage /></FormItem>} />
         <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
       </form></Form>
