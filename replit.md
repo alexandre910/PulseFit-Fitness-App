@@ -7,7 +7,7 @@ PulseFit is a Portuguese-language fitness app for managing training plans, sched
 - `pnpm --filter @workspace/pulsefit run dev` — run the PulseFit frontend
 - `pnpm --filter @workspace/pulsefit run typecheck` — check the frontend types
 - `pnpm run typecheck` — full typecheck across all packages
-- Optional frontend env: `VITE_API_BASE_URL` — upstream REST API base URL. Defaults to the temporary ngrok URL supplied for this app.
+- API base: `https://shaded-jot-pacify.ngrok-free.dev` — use this Java API directly; do not redirect requests to localhost or replace API data with local/mock fallbacks.
 
 ## Stack
 

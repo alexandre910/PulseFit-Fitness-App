@@ -6,7 +6,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
+import { API_BASE, clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import NotFound from '@/pages/not-found';
 import CostinhaAssistant from '@/components/costinha-assistant';
@@ -137,9 +137,26 @@ function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
     staleTime: alwaysFresh ? 0 : undefined,
     refetchOnMount: alwaysFresh ? 'always' : undefined,
     queryFn: async () => {
-      if (!cliente) return [];
-      const data = await request<unknown>(`/api/treinos/usuario/${cliente.id}`);
-      return listFrom<Treino>(data, 'treinos');
+      if (!cliente) throw new Error('Entre na sua conta para carregar os treinos.');
+      const idUsuario = Number(cliente.id);
+      if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+        throw new Error('Não foi possível identificar o cliente conectado. Entre novamente.');
+      }
+      const path = `/api/treinos/usuario/${idUsuario}`;
+      const response = await request<unknown>(path);
+      if (import.meta.env.DEV) {
+        console.info('[PulseFit] Resposta de treinos do cliente', {
+          idUsuario,
+          endpoint: `${API_BASE}${path}`,
+          resposta: response,
+        });
+      }
+      const validEnvelope = Array.isArray(response) ||
+        (typeof response === 'object' && response !== null && Array.isArray((response as { treinos?: unknown }).treinos));
+      if (!validEnvelope) {
+        throw new Error('A API retornou um formato inesperado ao carregar os treinos.');
+      }
+      return listFrom<Treino>(response, 'treinos');
     },
   });
 }
@@ -172,14 +189,22 @@ function ModalityTag({ value }: { value?: string }) {
 }
 function WorkoutCard({ workout, onDelete }: { workout: Treino; onDelete?: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
+  const locked = workout.liberado !== true;
+  const summary = <>
+    <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
+    <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
+  </>;
   return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
     <div className="h-1.5" style={{ backgroundColor: color }} />
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]"><ChevronRight size={18} /></span></div>
-      <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
-        <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
-        <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
-      </Link>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap gap-2"><ModalityTag value={workout.modalidade} />
+          {workout.concluido === true && <span className="tag bg-[#056c5c] text-white" data-testid={`tag-treino-concluido-${workout.id}`}><Check size={12} className="mr-1" />Concluído</span>}
+        </div>
+        {locked ? <span className="tag" aria-label="Treino bloqueado"><LockKeyhole size={13} /></span> : <span className="text-[#8994a6]"><ChevronRight size={18} /></span>}
+      </div>
+      {locked ? <div className="block cursor-not-allowed" aria-disabled="true">{summary}</div> : <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>{summary}</Link>}
+      {locked && <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-[#ffc66e]" role="status" data-testid={`status-treino-bloqueado-${workout.id}`}><LockKeyhole size={14} className="mt-0.5 shrink-0" />Conclua o treino anterior na agenda para liberar</p>}
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
         {workout.podeExcluir === true && onDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir treino ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={20} /><span className="text-xs">Excluir treino</span></Button>}
       </div>
@@ -353,7 +378,7 @@ function Inicio() {
   </div>;
 }
 function Treinos() {
-  const cliente = useCliente(); const query = useTreinos(cliente);
+  const cliente = useCliente(); const query = useTreinos(cliente, true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Treino | null>(null);
@@ -441,7 +466,8 @@ function TreinoDetalhe() {
   const cliente = useCliente();
   const isBeginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
   const treinoQuery = useTreinos(cliente);
-  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id), queryFn: async () => {
+  const treino = treinoQuery.data?.find((item) => item.id === id);
+  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id) && treino?.liberado === true, queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
     const settled = await Promise.allSettled(relations.map(async (relation) => {
       if (isBeginner) {
@@ -458,9 +484,8 @@ function TreinoDetalhe() {
     exercises.sort((a,b) => Number(b.exercise.modalidade?.toLowerCase() === 'aquecimento') - Number(a.exercise.modalidade?.toLowerCase() === 'aquecimento'));
     return { exercises, failedCount: settled.length - exercises.length };
   } });
-  const treino = treinoQuery.data?.find((item) => item.id === id);
   return <div className="page-wrap"><Link href="/treinos" className="mb-6 inline-flex items-center gap-2 text-sm text-[#9ba5b5]" data-testid="link-voltar-treinos"><ArrowLeft size={16} /> Todos os treinos</Link>
-    {treinoQuery.isLoading || detail.isLoading ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : <>
+    {treinoQuery.isLoading || (treino?.liberado === true && detail.isLoading) ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : treino.liberado !== true ? <EmptyState title="Treino bloqueado." body="Conclua o treino anterior na agenda para liberar." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : <>
       <Heading kicker="DETALHES DO TREINO" title={treino.nome} detail={treino.descricao || 'Uma sessão para avançar no seu ritmo.'}><ModalityTag value={treino.modalidade} /></Heading>
       {detail.error && <ErrorState message={friendlyError(detail.error)} retry={() => detail.refetch()} />}
       {!detail.error && detail.data?.exercises.length === 0 && <EmptyState title="Exercícios indisponíveis." body="Este treino ainda não tem exercícios cadastrados." />}
@@ -480,11 +505,12 @@ function Agenda() {
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busyId, setBusyId] = useState<number | null>(null); const [showForm, setShowForm] = useState(false);
   const today = new Date(); const maxDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const form = useForm<{ idTreino: string; dataAgendada: string }>({ defaultValues: { idTreino: '', dataAgendada: '' } });
+  const liberados = (treinos.data || []).filter((treino) => treino.liberado === true);
   async function create(values: { idTreino: string; dataAgendada: string }) {
     if (!cliente) return;
     setError(''); setNotice('');
     const idTreino = Number(values.idTreino);
-    if (!Number.isInteger(idTreino) || !treinos.data?.some((treino) => Number(treino.id) === idTreino)) {
+    if (!Number.isInteger(idTreino) || !liberados.some((treino) => Number(treino.id) === idTreino)) {
       setError('Selecione um treino disponível para sua conta.');
       return;
     }
@@ -498,7 +524,7 @@ function Agenda() {
   }
   async function complete(item: AgendaItem) {
     setBusyId(item.id); setError(''); setNotice('');
-    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await query.refetch(); }
+    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await Promise.all([query.refetch(), treinos.refetch()]); }
     catch (e) { setError(friendlyError(e)); } finally { setBusyId(null); }
   }
   const ordered = [...(query.data || [])].sort((a,b) => new Date(a.dataAgendada).getTime() - new Date(b.dataAgendada).getTime());
@@ -507,9 +533,9 @@ function Agenda() {
   return <div className="page-wrap"><Heading kicker="RITMO E CONSTÂNCIA" title="Sua agenda" detail="Planeje seu próximo encontro com o movimento."><button className="btn btn-primary inline-flex items-center justify-center" onClick={() => setShowForm((v) => !v)} data-testid="button-novo-agendamento">{showForm ? <X size={16} className="mr-2" /> : <CalendarDays size={16} className="mr-2" />}{showForm ? 'Fechar' : 'Agendar treino'}</button></Heading>
     {error && <div className="error-box mb-5" role="alert" data-testid="status-agenda-error">{error}</div>}{notice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agenda-success">{notice}</div>}
     {showForm && <div className="panel mb-6 p-5 sm:p-6"><h2 className="display mb-5 text-3xl uppercase">Marque seu próximo treino</h2><Form {...form}><form className="grid gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit(create)}>
-       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" data-testid="select-agenda-treino"><option value="">Selecione um treino</option>{treinos.data?.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
+       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" disabled={!liberados.length} data-testid="select-agenda-treino"><option value="">{liberados.length ? 'Selecione um treino' : 'Nenhum treino liberado'}</option>{liberados.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
       <FormField control={form.control} name="dataAgendada" rules={{ required: 'Escolha uma data e horário.' }} render={({ field }) => <FormItem><FormLabel className="label">Data e horário</FormLabel><FormControl><Input {...field} type="datetime-local" min={minInput} max={maxInput} className="field" data-testid="input-agenda-data" /></FormControl><FormMessage /></FormItem>} />
-      <Button type="submit" disabled={!treinos.data?.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
+       <Button type="submit" disabled={!liberados.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
     </form></Form></div>}
      {(query.isLoading || treinos.isLoading) ? <PageLoading /> : query.error || treinos.error ? <ErrorState message={friendlyError(query.error || treinos.error)} retry={() => { query.refetch(); treinos.refetch(); }} /> : !ordered.length ? <EmptyState title="Sua agenda está livre." body="Escolha um treino e reserve um momento para você." action={<button className="btn btn-primary" onClick={() => setShowForm(true)} data-testid="button-agendar-vazio">Agendar um treino</button>} /> : <div className="space-y-3">{ordered.map((item) => {
       const workout = treinos.data?.find((t) => t.id === item.idTreino);
