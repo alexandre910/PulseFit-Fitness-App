@@ -1,5 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Activity, ArrowRight, Dumbbell, ExternalLink, HeartPulse, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowRight, Dumbbell, ExternalLink, HeartPulse, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
 import { asArray, Exercico, friendlyError, getCliente, RelacaoExercicio, request, requestAudio, Treino } from '@/lib/api';
 import { useLocation } from 'wouter';
 
@@ -8,6 +8,28 @@ type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageK
 type Props = { avatarVideoUrl?: string };
 type LauncherPosition = { x: number; y: number };
 type LauncherDrag = { pointerId: number; startX: number; startY: number; origin: LauncherPosition; moved: boolean };
+type VoiceChoice = { label: string; aliases: string[]; run: () => void };
+type SpeechAlternative = { transcript: string; confidence?: number };
+type SpeechResult = ArrayLike<SpeechAlternative>;
+type SpeechResultEvent = { resultIndex: number; results: ArrayLike<SpeechResult> };
+type SpeechErrorEvent = { error: string };
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechResultEvent) => void) | null;
+  onerror: ((event: SpeechErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
 
 const GREETING = 'Olá, como posso ajudá-lo! Sou seu assistente virtual Costinha e ajudo com informação sobre nutrição, musculação ou calistenia.';
 const GROUPS = [{ label: 'Peito', api: 'Peito' }, { label: 'Perna', api: 'Perna' }, { label: 'Braço', api: 'Braco' }, { label: 'Costas', api: 'Costas' }];
@@ -102,15 +124,62 @@ function normalized(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+function normalizedSpeech(value: string) {
+  return normalized(value).replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function editDistance(a: string, b: string) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const above = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diagonal + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diagonal = above;
+    }
+  }
+  return row[b.length];
+}
+
+function matchVoiceChoice(value: string, choices: VoiceChoice[]) {
+  const spoken = normalizedSpeech(value);
+  if (!spoken) return undefined;
+  for (const choice of choices) {
+    for (const alias of choice.aliases) {
+      const normalizedAlias = normalizedSpeech(alias);
+      if (spoken === normalizedAlias || (normalizedAlias.length >= 4 && spoken.includes(normalizedAlias))) return choice;
+    }
+  }
+
+  let closest: { choice: VoiceChoice; distance: number; limit: number } | undefined;
+  for (const choice of choices) {
+    for (const alias of choice.aliases) {
+      const normalizedAlias = normalizedSpeech(alias);
+      const longest = Math.max(spoken.length, normalizedAlias.length);
+      if (Math.min(spoken.length, normalizedAlias.length) < 5) continue;
+      const limit = Math.max(1, Math.floor(longest * 0.18));
+      const distance = editDistance(spoken, normalizedAlias);
+      if (distance <= limit && (!closest || distance < closest.distance)) closest = { choice, distance, limit };
+    }
+  }
+  return closest?.choice;
+}
+
 export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const [path] = useLocation();
   const [open, setOpen] = useState(false);
   const [initialPosition] = useState(() => loadLauncherPosition(path));
   const [position, setPosition] = useState<LauncherPosition>(initialPosition.position);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [audioUnavailable, setAudioUnavailable] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState('');
   const sequence = useRef(0);
+  const messagesRef = useRef(messages);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -125,6 +194,19 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const suppressClickRef = useRef(false);
   openRef.current = open;
   positionRef.current = position;
+  messagesRef.current = messages;
+
+  const stopRecognition = useCallback(() => {
+    const recognition = speechRecognitionRef.current;
+    speechRecognitionRef.current = null;
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      recognition.abort();
+    }
+    setListening(false);
+  }, []);
 
   useEffect(() => {
     const keepPositionInBounds = () => {
@@ -209,26 +291,33 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        stopRecognition();
         setOpen(false);
         stopAudio();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, stopAudio]);
+  }, [open, stopAudio, stopRecognition]);
 
-  useEffect(() => () => stopAudio(), [stopAudio]);
+  useEffect(() => () => {
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+    stopAudio();
+  }, [stopAudio]);
 
-  const close = () => { setOpen(false); stopAudio(); };
+  const close = () => { stopRecognition(); setOpen(false); stopAudio(); };
   const launch = () => {
     if (open) return;
     setMessages([]);
+    messagesRef.current = [];
+    setDraft('');
+    setVoiceNotice('');
     setOpen(true);
     addMessage({ from: 'assistant', kind: 'text', text: GREETING }, GREETING);
     addMessage({ from: 'assistant', kind: 'topics' });
   };
   const chooseTopic = (topic: string) => {
-    addMessage({ from: 'user', kind: 'text', text: topic });
     if (topic === 'Nutrição') {
       addMessage({ from: 'assistant', kind: 'text', text: 'A nutrição com inteligência artificial está à espera do endpoint Java. Assim que estiver disponível, poderei ajudar por aqui.' });
     } else if (topic === 'Musculação') {
@@ -295,6 +384,121 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     } finally { setBusy(false); }
   };
 
+  const chooseAction = (action: 'workout' | 'exercises') => {
+    if (action === 'workout') {
+      void makeWorkout();
+      return;
+    }
+    addMessage({ from: 'assistant', kind: 'groups' });
+  };
+
+  const chooseGroup = (group: typeof GROUPS[number]) => {
+    void loadExercises(group.api, 'Musculacao');
+  };
+
+  const voiceChoicesFor = (message?: AssistantMessage): VoiceChoice[] => {
+    if (!message || message.from !== 'assistant') return [];
+    if (message.kind === 'topics') return [
+      { label: 'Nutrição', aliases: ['nutricao', 'alimentacao', 'ganho de massa muscular', 'definicao', 'definicao muscular', 'emagrecimento'], run: () => chooseTopic('Nutrição') },
+      { label: 'Musculação', aliases: ['musculacao', 'academia'], run: () => chooseTopic('Musculação') },
+      { label: 'Calistenia', aliases: ['calistenia', 'treino com peso do corpo'], run: () => chooseTopic('Calistenia') },
+    ];
+    if (message.kind === 'actions') return [
+      { label: 'Montar treino', aliases: ['montar treino', 'montar meu treino', 'criar treino', 'criar meu treino', 'montar treino rapido', 'treino rapido'], run: () => chooseAction('workout') },
+      { label: 'Ver exercícios', aliases: ['ver exercicios', 'ver os exercicios', 'mostrar exercicios', 'exercicios'], run: () => chooseAction('exercises') },
+    ];
+    if (message.kind === 'groups' && message.group === 'Calistenia') return [
+      { label: 'Tentar novamente', aliases: ['tentar novamente', 'repetir', 'nova busca'], run: () => void loadExercises(undefined, 'Calistenia') },
+    ];
+    if (message.kind === 'groups') return GROUPS.map(group => ({
+      label: group.label,
+      aliases: group.label === 'Braço' ? ['braco', 'bracos', 'braço', 'biceps', 'triceps'] : group.label === 'Perna' ? ['perna', 'pernas'] : group.label === 'Peito' ? ['peito', 'peitoral'] : ['costas'],
+      run: () => chooseGroup(group),
+    }));
+    return [];
+  };
+
+  const submitUserText = (rawText: string, fromVoice = false) => {
+    const text = rawText.trim();
+    if (!text || busy || (listening && !fromVoice)) return;
+    setDraft('');
+    setVoiceNotice('');
+    const lastAssistantMessage = [...messagesRef.current].reverse().find(message => message.from === 'assistant');
+    const choices = voiceChoicesFor(lastAssistantMessage);
+    const match = matchVoiceChoice(text, choices);
+    addMessage({ from: 'user', kind: 'text', text });
+    if (match) {
+      match.run();
+      return;
+    }
+    const prompt = choices.length
+      ? `Não identifiquei uma opção para “${text}”. Escolha uma das opções mostradas (${choices.map(choice => choice.label).join(', ')}) ou tente novamente.`
+      : `Recebi “${text}”, mas não consegui identificar uma opção nesta etapa. Escolha uma das opções disponíveis ou tente novamente.`;
+    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups'].includes(lastAssistantMessage.kind)) {
+      addMessage({ from: 'assistant', kind: lastAssistantMessage.kind, group: lastAssistantMessage.group, text: prompt });
+    } else {
+      addMessage({ from: 'assistant', kind: 'text', text: prompt });
+    }
+  };
+
+  const startVoiceInput = () => {
+    if (listening) {
+      setVoiceNotice('Finalizando…');
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+    const speechWindow = window as SpeechRecognitionWindow;
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setVoiceNotice('Este navegador não oferece reconhecimento de voz. Você pode digitar sua mensagem.');
+      return;
+    }
+    try {
+      const recognition = new Recognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 4;
+      recognition.onresult = event => {
+        const result = event.results[event.resultIndex];
+        const alternatives = result ? Array.from(result).map(item => item.transcript.trim()).filter(Boolean) : [];
+        const lastAssistantMessage = [...messagesRef.current].reverse().find(message => message.from === 'assistant');
+        const choices = voiceChoicesFor(lastAssistantMessage);
+        const transcript = alternatives.find(candidate => matchVoiceChoice(candidate, choices)) || alternatives[0];
+        if (transcript) submitUserText(transcript, true);
+        else setVoiceNotice('Não consegui transcrever a fala. Tente novamente ou digite sua mensagem.');
+      };
+      recognition.onerror = event => {
+        const messages: Record<string, string> = {
+          'not-allowed': 'Permita o acesso ao microfone nas configurações do navegador.',
+          'service-not-allowed': 'O navegador bloqueou o reconhecimento de voz.',
+          'no-speech': 'Não ouvi sua fala. Tente novamente.',
+          'audio-capture': 'Não encontrei um microfone disponível.',
+          network: 'O reconhecimento de voz falhou. Você pode digitar sua mensagem.',
+        };
+        setVoiceNotice(messages[event.error] || 'Não foi possível reconhecer a fala. Tente novamente ou digite sua mensagem.');
+      };
+      recognition.onend = () => {
+        if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+        setListening(false);
+        setVoiceNotice(current => current === 'Ouvindo… Fale sua opção.' || current === 'Finalizando…' ? '' : current);
+      };
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setListening(true);
+      setVoiceNotice('Ouvindo… Fale sua opção.');
+    } catch {
+      speechRecognitionRef.current = null;
+      setListening(false);
+      setVoiceNotice('Não foi possível iniciar o microfone. Você pode digitar sua mensagem.');
+    }
+  };
+
+  const latestAssistantMessage = [...messages].reverse().find(message => message.from === 'assistant');
+  const activeChoiceMessageId = latestAssistantMessage && voiceChoicesFor(latestAssistantMessage).length
+    ? latestAssistantMessage.id
+    : undefined;
+
   const retryLast = () => {
     retryRef.current?.();
   };
@@ -353,18 +557,18 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
           {message.from === 'assistant' && <div className="costinha-avatar costinha-avatar-chat" aria-hidden="true" data-testid="img-avatar-costinha-message">{avatarVideoUrl ? <video src={avatarVideoUrl} muted loop autoPlay playsInline /> : <div className="costinha-face"><span /><i /><b /></div>}</div>}
           <div className={`costinha-bubble ${message.from === 'user' ? 'user-bubble' : ''}`}>
             {message.text && <p data-testid={`text-costinha-${message.id}`}>{message.text}</p>}
-            {message.error && <button className="costinha-retry" type="button" onClick={retryLast} disabled={busy} data-testid="button-retry-costinha"><RotateCcw size={14} /> Tentar novamente</button>}
+            {message.error && <button className="costinha-retry" type="button" onClick={retryLast} disabled={busy || listening} data-testid="button-retry-costinha"><RotateCcw size={14} /> Tentar novamente</button>}
             {message.kind === 'topics' && <div className="costinha-chip-row" data-testid="choices-costinha-topics">
-              {['Nutrição', 'Musculação', 'Calistenia'].map(topic => <button type="button" className="costinha-chip" key={topic} disabled={busy} onClick={() => chooseTopic(topic)} data-testid={`button-topic-${topic.toLowerCase()}`}>{topic}<ArrowRight size={13} /></button>)}
+              {['Nutrição', 'Musculação', 'Calistenia'].map(topic => <button type="button" className="costinha-chip" key={topic} disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText(topic)} data-testid={`button-topic-${topic.toLowerCase()}`}>{topic}<ArrowRight size={13} /></button>)}
             </div>}
             {message.kind === 'actions' && <div className="costinha-action-row" data-testid="choices-musculacao">
-              <button type="button" onClick={() => { addMessage({ from: 'user', kind: 'text', text: 'Montar treino' }); void makeWorkout(); }} disabled={busy} data-testid="button-montar-treino"><Dumbbell size={15} /> Montar treino</button>
-              <button type="button" onClick={() => { addMessage({ from: 'user', kind: 'text', text: 'Ver exercícios' }); addMessage({ from: 'assistant', kind: 'groups' }); }} disabled={busy} data-testid="button-ver-exercicios"><Activity size={15} /> Ver exercícios</button>
+              <button type="button" onClick={() => submitUserText('Montar treino')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-montar-treino"><Dumbbell size={15} /> Montar treino</button>
+              <button type="button" onClick={() => submitUserText('Ver exercícios')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-ver-exercicios"><Activity size={15} /> Ver exercícios</button>
             </div>}
             {message.kind === 'groups' && <div className="costinha-chip-row" data-testid="choices-exercise-groups">
               {message.group === 'Calistenia'
-                ? <button className="costinha-chip" type="button" disabled={busy} onClick={() => void loadExercises(undefined, 'Calistenia')} data-testid="button-retry-calistenia">Tentar novamente<RotateCcw size={13} /></button>
-                : GROUPS.map(group => <button className="costinha-chip" type="button" key={group.api} disabled={busy} onClick={() => { addMessage({ from: 'user', kind: 'text', text: group.label }); void loadExercises(group.api, 'Musculacao'); }} data-testid={`button-group-${group.api.toLowerCase()}`}>{group.label}<ArrowRight size={13} /></button>)}
+                ? <button className="costinha-chip" type="button" disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText('Tentar novamente')} data-testid="button-retry-calistenia">Tentar novamente<RotateCcw size={13} /></button>
+                : GROUPS.map(group => <button className="costinha-chip" type="button" key={group.api} disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText(group.label)} data-testid={`button-group-${group.api.toLowerCase()}`}>{group.label}<ArrowRight size={13} /></button>)}
             </div>}
             {message.kind === 'workout' && <WorkoutCards warmups={message.warmups ?? []} mains={message.mains ?? []} />}
             {message.kind === 'exercises' && <ExerciseCards items={message.items ?? []} />}
@@ -373,6 +577,30 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
         {busy && <div className="costinha-loading" role="status" data-testid="status-costinha-loading"><span /><span /><span /> <em>A procurar no seu plano…</em></div>}
         {audioUnavailable && <p className="costinha-audio-note" role="status" data-testid="status-audio-unavailable">Não foi possível reproduzir a voz agora. A mensagem continua disponível em texto.</p>}
       </div>
+      <form className="costinha-composer" onSubmit={event => { event.preventDefault(); submitUserText(draft); }}>
+        <input
+          className="costinha-input"
+          type="text"
+          value={draft}
+          onChange={event => setDraft(event.target.value)}
+          placeholder="Escreva ou fale com o Costinha"
+          aria-label="Mensagem para o Costinha"
+          disabled={busy || listening}
+          data-testid="input-costinha-message"
+        />
+        <button
+          className={`costinha-mic-button ${listening ? 'is-listening' : ''}`}
+          type="button"
+          onClick={startVoiceInput}
+          disabled={busy}
+          aria-label={listening ? 'Parar gravação de voz' : 'Falar com o Costinha'}
+          aria-pressed={listening}
+          title={listening ? 'Parar gravação' : 'Falar com o Costinha'}
+          data-testid="button-costinha-microphone"
+        >{listening ? <MicOff size={18} /> : <Mic size={18} />}</button>
+        <button className="costinha-send-button" type="submit" disabled={busy || listening || !draft.trim()} aria-label="Enviar mensagem" data-testid="button-send-costinha-message"><ArrowRight size={18} /></button>
+      </form>
+      {voiceNotice && <p className="costinha-voice-status" role="status" aria-live="polite" data-testid="status-costinha-voice">{voiceNotice}</p>}
       <footer className="costinha-footer"><Sparkles size={14} /><span>Informação para acompanhar o seu ritmo</span></footer>
     </section>}
     <button
