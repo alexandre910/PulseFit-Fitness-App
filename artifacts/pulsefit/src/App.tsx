@@ -106,7 +106,7 @@ function Cadastro() {
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-6 space-y-4">
       {field('nome', 'Nome completo', 'text', 'Como podemos te chamar?')}{field('email', 'E-mail', 'email', 'voce@email.com')}{field('senha', 'Senha', 'password', 'Crie uma senha')}{field('idade', 'Idade', 'number', '13')}
       <FormField control={form.control} name="sexo" rules={{ required: 'Selecione uma opção.' }} render={({ field: f }) => <FormItem><FormLabel className="label">Sexo</FormLabel><FormControl><select {...f} className="field" data-testid="select-sexo"><option value="">Selecione</option><option value="Feminino">Feminino</option><option value="Masculino">Masculino</option><option value="Outro">Outro</option></select></FormControl><FormMessage /></FormItem>} />
-      <FormField control={form.control} name="nivelExperiencia" rules={{ required: 'Selecione seu nível.' }} render={({ field: f }) => <FormItem><FormLabel className="label">Experiência</FormLabel><FormControl><select {...f} className="field" data-testid="select-nivel"><option value="">Selecione</option><option value="iniciante">Iniciante</option><option value="avançado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
+      <FormField control={form.control} name="nivelExperiencia" rules={{ required: 'Selecione seu nível.' }} render={({ field: f }) => <FormItem><FormLabel className="label">Experiência</FormLabel><FormControl><select {...f} className="field" data-testid="select-nivel"><option value="">Selecione</option><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avançado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
       <Button disabled={busy} className="btn btn-primary w-full" type="submit" data-testid="button-cadastro">{busy ? 'Criando conta…' : 'Criar minha conta'}<ArrowRight size={17} className="ml-2" /></Button>
     </form></Form>
     <p className="mt-5 text-center text-sm text-[#9ca6b6]">Já tem conta? <Link href="/login" className="font-bold" style={{ color: '#FFA213' }} data-testid="link-login">Entrar</Link></p>
@@ -208,8 +208,9 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
   const params = new URLSearchParams();
   if (groupMuscular) params.set('grupoMuscular', groupMuscular);
   if (modality) params.set('modalidade', modality);
+  params.set('idUsuario', String(cliente.id));
   const exerciseQuery = useQuery({
-    queryKey: ['exercicios-builder', groupMuscular, modality],
+    queryKey: ['exercicios-builder', cliente.id, groupMuscular, modality],
     enabled: true,
     queryFn: async () => {
       const suffix = params.toString();
@@ -357,6 +358,8 @@ function Inicio() {
 }
 function Treinos() {
   const cliente = useCliente(); const query = useTreinos(cliente);
+  const normalizedExperience = cliente?.nivelExperiencia?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const canBuildWorkout = ['intermediario', 'avancado', 'intermediate', 'advanced'].includes(normalizedExperience || '');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Treino | null>(null);
@@ -370,6 +373,7 @@ function Treinos() {
     defaultValues: { nome: '', descricao: '', modalidade: '', nivel: '' },
   });
   function openCreateForm() {
+    if (!canBuildWorkout) return;
     setCreateError(''); setCreateNotice('');
     form.reset({ nome: suggestedWorkoutName(query.data?.length ?? 0), descricao: '', modalidade: '', nivel: '' });
     setShowCreateForm(true);
@@ -415,7 +419,7 @@ function Treinos() {
     } catch (cause) { setDeleteError(friendlyError(cause)); }
     finally { setDeleting(false); }
   }
-  return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância."><Button type="button" disabled={query.isLoading || !!query.error} className="btn btn-primary inline-flex items-center" onClick={openCreateForm} data-testid="button-abrir-criar-treino"><Plus size={16} className="mr-2" />Novo treino</Button></Heading>
+  return <div className="page-wrap"><Heading kicker="PLANO DE TREINO" title="Treinos" detail="Rotinas para construir força, habilidade e constância.">{canBuildWorkout && <Button type="button" disabled={query.isLoading || !!query.error} className="btn btn-primary inline-flex items-center" onClick={openCreateForm} data-testid="button-abrir-criar-treino"><Plus size={16} className="mr-2" />Novo treino</Button>}</Heading>
     {createError && <div className="error-box mb-5" role="alert" data-testid="status-criar-treino-error">{createError}</div>}
     {deleteError && <div className="error-box mb-5" role="alert" data-testid="status-excluir-treino-error">{deleteError}</div>}
     {deleteNotice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-excluir-treino-success">{deleteNotice}</div>}
@@ -429,7 +433,7 @@ function Treinos() {
         <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
       </form></Form>
     </div>}
-    {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
+    {buildingWorkout && cliente && canBuildWorkout && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
     {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Number(t.idUsuarioAvancado) === Number(cliente?.id)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
     <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
       <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
