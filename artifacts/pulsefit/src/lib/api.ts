@@ -1,4 +1,11 @@
-export const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'https://shaded-jot-pacify.ngrok-free.dev').replace(/\/$/, '');
+export const API_BASE = 'https://shaded-jot-pacify.ngrok-free.dev';
+
+function apiHeaders(headers?: HeadersInit) {
+  const merged = new Headers(headers);
+  if (!merged.has('Content-Type')) merged.set('Content-Type', 'application/json');
+  merged.set('ngrok-skip-browser-warning', 'true');
+  return merged;
+}
 
 export type Cliente = {
   id: number;
@@ -33,7 +40,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...(init.headers || {}) },
+      headers: apiHeaders(init.headers),
     });
   } catch {
     throw new ApiError('Não foi possível conectar ao PulseFit. Confira sua conexão e tente novamente.', 0);
@@ -54,7 +61,7 @@ export async function requestAudio(path: string, init: RequestInit = {}): Promis
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...(init.headers || {}) },
+      headers: apiHeaders(init.headers),
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
