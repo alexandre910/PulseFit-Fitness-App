@@ -1,16 +1,22 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, ArrowRight, Dumbbell, ExternalLink, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
-import { asArray, Exercico, friendlyError, getCliente, request, requestAudio, Treino } from '@/lib/api';
+import { ApiError, asArray, Exercico, friendlyError, getCliente, request, requestAudio, Treino } from '@/lib/api';
 import { useLocation } from 'wouter';
 
-type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'exercises';
+type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'workout-period' | 'workout-time' | 'exercises';
 type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; error?: boolean };
 type Props = { avatarVideoUrl?: string };
 type LauncherPosition = { x: number; y: number };
 type LauncherDrag = { pointerId: number; startX: number; startY: number; origin: LauncherPosition; moved: boolean };
 type VoiceChoice = { label: string; aliases: string[]; run: () => void };
-type WorkoutRequest = { nivel: 'iniciante' | 'intermediario' | 'avancado'; tipo?: 'misto' | 'especifico'; grupo?: 'Perna' | 'Peito' | 'Braco' | 'Costas' };
+type WorkoutRequest = {
+  nivel: 'iniciante' | 'intermediario' | 'avancado';
+  tipo?: 'misto' | 'especifico';
+  grupo?: 'Perna' | 'Peito' | 'Braco' | 'Costas';
+  periodo?: 'manha' | 'tarde' | 'noite';
+  horario?: string;
+};
 type SpeechAlternative = { transcript: string; confidence?: number };
 type SpeechResult = ArrayLike<SpeechAlternative>;
 type SpeechResultEvent = { resultIndex: number; results: ArrayLike<SpeechResult> };
@@ -123,6 +129,57 @@ function normalized(value: string) {
 
 function normalizedSpeech(value: string) {
   return normalized(value).replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function parseWorkoutTime(input: string, period: NonNullable<WorkoutRequest['periodo']>): string | null {
+  const value = normalized(input).toLowerCase().replace(/[,.!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!value) return null;
+  const saidPeriod = value.match(/\b(?:da|de|na|no|a)\s+(manha|tarde|noite)\b/)?.[1] as WorkoutRequest['periodo'] | undefined;
+  if (saidPeriod && saidPeriod !== period) return null;
+
+  const hourWords: Record<string, number> = {
+    meia: 0.5,
+    uma: 1, um: 1, duas: 2, dois: 2, tres: 3, quatro: 4, cinco: 5, seis: 6,
+    sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
+  };
+  const spokenMinute = (text: string) => {
+    if (/\b(?:meia|meio)\b/.test(text)) return 30;
+    if (/\b(?:um quarto|quinze|quarto)\b/.test(text)) return 15;
+    if (/\bvinte e cinco\b/.test(text)) return 25;
+    if (/\bvinte\b/.test(text)) return 20;
+    if (/\btrinta\b/.test(text)) return 30;
+    if (/\bquarenta e cinco\b/.test(text)) return 45;
+    if (/\bquarenta\b/.test(text)) return 40;
+    if (/\bcinquenta\b/.test(text)) return 50;
+    const spokenMinutes = text.match(/\be\s+(\d{1,2})\b/);
+    return spokenMinutes ? Number(spokenMinutes[1]) : undefined;
+  };
+  const wordTokens = value.split(' ');
+  let hour: number | undefined;
+  let minute: number | undefined;
+  let hourTokenIndex = -1;
+
+  const numericTime = value.match(/\b(\d{1,2})(?:\s*(?::|h|e)\s*(\d{1,2}))?\s*(?:h|horas?)?\b/);
+  if (numericTime) {
+    hour = Number(numericTime[1]);
+    minute = numericTime[2] === undefined
+      ? spokenMinute(value.slice((numericTime.index ?? 0) + numericTime[0].length)) ?? 0
+      : Number(numericTime[2]);
+  } else {
+    hourTokenIndex = wordTokens.findIndex(token => Object.hasOwn(hourWords, token) && token !== 'meia');
+    if (hourTokenIndex < 0) return null;
+    hour = hourWords[wordTokens[hourTokenIndex]];
+    minute = spokenMinute(wordTokens.slice(hourTokenIndex + 1).join(' ')) ?? 0;
+  }
+
+  if (!Number.isInteger(hour) || hour! < 0 || hour! > 23 || !Number.isInteger(minute) || minute! < 0 || minute! > 59) return null;
+
+  if (hour! >= 1 && hour! <= 12) {
+    if (period === 'tarde' && hour! < 12) hour! += 12;
+    if (period === 'noite') hour! = hour! === 12 ? 0 : hour! + 12;
+  }
+
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function editDistance(a: string, b: string) {
@@ -355,6 +412,12 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       addMessage({ from: 'assistant', kind: 'text', text: 'Para criar um treino, entre na sua conta de cliente e volte a tentar.' });
       return;
     }
+    if (!details.tipo || !details.periodo || !details.horario || (details.tipo === 'especifico' && !details.grupo)) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Ainda falta uma escolha para criar o treino. Vamos começar novamente pelo nível.' });
+      workoutRequestRef.current = null;
+      addMessage({ from: 'assistant', kind: 'workout-level', text: 'Qual o seu nível? Iniciante, intermediário ou avançado?' });
+      return;
+    }
     setBusy(true);
     try {
       const body = {
@@ -362,6 +425,8 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
         nivel: details.nivel,
         tipo: details.tipo,
         ...(details.tipo === 'especifico' && details.grupo ? { grupo: details.grupo } : {}),
+        periodo: details.periodo,
+        horario: details.horario,
       };
       const response = await request<unknown>('/api/treinos/assistente', {
         method: 'POST',
@@ -374,10 +439,18 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       if (!created || typeof created !== 'object' || !created.id) {
         throw new Error('A API criou o treino, mas não retornou os dados esperados.');
       }
-      await queryClient.invalidateQueries({ queryKey: ['treinos', client.id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['treinos', client.id] }),
+        queryClient.invalidateQueries({ queryKey: ['agenda', client.id] }),
+      ]);
       const name = created.nome?.trim() || 'seu treino';
-      addMessage({ from: 'assistant', kind: 'text', text: `Pronto! Criei o “${name}” pra você. Já pode ver ele na sua lista de treinos.` });
+      addMessage({ from: 'assistant', kind: 'text', text: `Pronto! Criei o “${name}” pra você e já agendei para hoje às ${details.horario}. Você pode ver ele na sua lista de treinos e na sua agenda.` });
     } catch (error) {
+      if (error instanceof ApiError && error.status === 400 && /horario|hora/.test(normalized(error.message))) {
+        workoutRequestRef.current = { ...details, horario: undefined };
+        addMessage({ from: 'assistant', kind: 'workout-time', text: 'A API não aceitou esse horário. Diga novamente no formato HH:mm, como 19:30, ou fale, por exemplo, “sete da noite”.' });
+        return;
+      }
       addMessage({ from: 'assistant', kind: 'text', text: friendlyError(error), error: true });
     } finally { setBusy(false); }
   };
@@ -396,7 +469,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const details: WorkoutRequest = { ...current, tipo };
     workoutRequestRef.current = details;
     if (tipo === 'misto') {
-      void createAssistantWorkout(details);
+      addMessage({ from: 'assistant', kind: 'workout-period', text: 'Qual período você prefere treinar? Manhã, tarde ou noite?' });
       return;
     }
     addMessage({ from: 'assistant', kind: 'workout-group', text: 'Qual grupo muscular? Perna, peito, braço ou costas?' });
@@ -408,7 +481,33 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       addMessage({ from: 'assistant', kind: 'text', text: 'Vamos começar de novo. Escolha “Montar treino” para selecionar o seu nível.' });
       return;
     }
-    const details: WorkoutRequest = { ...current, tipo: 'especifico', grupo };
+    workoutRequestRef.current = { ...current, tipo: 'especifico', grupo };
+    addMessage({ from: 'assistant', kind: 'workout-period', text: 'Qual período você prefere treinar? Manhã, tarde ou noite?' });
+  };
+
+  const chooseWorkoutPeriod = (periodo: NonNullable<WorkoutRequest['periodo']>) => {
+    const current = workoutRequestRef.current;
+    if (!current) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Vamos começar de novo. Escolha “Montar treino” para selecionar o seu nível.' });
+      return;
+    }
+    workoutRequestRef.current = { ...current, periodo, horario: undefined };
+    addMessage({ from: 'assistant', kind: 'workout-time', text: 'Diga um horário. Você pode escrever, por exemplo, “19h”, “19:30” ou “sete da noite”.' });
+  };
+
+  const submitWorkoutTime = (text: string) => {
+    const current = workoutRequestRef.current;
+    if (!current?.periodo) {
+      workoutRequestRef.current = null;
+      addMessage({ from: 'assistant', kind: 'text', text: 'Vamos começar novamente. Escolha “Montar treino” para selecionar o seu nível.' });
+      return;
+    }
+    const horario = parseWorkoutTime(text, current.periodo);
+    if (!horario) {
+      addMessage({ from: 'assistant', kind: 'workout-time', text: 'Não consegui identificar um horário válido. Diga novamente, por exemplo, “19:30” ou “sete da noite”.' });
+      return;
+    }
+    const details = { ...current, horario };
     workoutRequestRef.current = details;
     void createAssistantWorkout(details);
   };
@@ -439,7 +538,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     ];
     if (message.kind === 'workout-level') return [
       { label: 'Iniciante', aliases: ['iniciante', 'nivel iniciante'], run: () => chooseWorkoutLevel('iniciante') },
-      { label: 'Intermediário', aliases: ['intermediario', 'intermediaria', 'nivel intermediario', 'nivel intermediario'], run: () => chooseWorkoutLevel('intermediario') },
+      { label: 'Intermediário', aliases: ['intermediario', 'intermediaria', 'nivel intermediario'], run: () => chooseWorkoutLevel('intermediario') },
       { label: 'Avançado', aliases: ['avancado', 'avancada', 'nivel avancado'], run: () => chooseWorkoutLevel('avancado') },
     ];
     if (message.kind === 'workout-type') return [
@@ -451,6 +550,11 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       { label: 'Peito', aliases: ['peito', 'peitoral'], run: () => chooseWorkoutGroup('Peito') },
       { label: 'Braço', aliases: ['braco', 'bracos', 'biceps', 'triceps'], run: () => chooseWorkoutGroup('Braco') },
       { label: 'Costas', aliases: ['costas'], run: () => chooseWorkoutGroup('Costas') },
+    ];
+    if (message.kind === 'workout-period') return [
+      { label: 'Manhã', aliases: ['manha', 'pela manha', 'de manha'], run: () => chooseWorkoutPeriod('manha') },
+      { label: 'Tarde', aliases: ['tarde', 'pela tarde', 'de tarde'], run: () => chooseWorkoutPeriod('tarde') },
+      { label: 'Noite', aliases: ['noite', 'pela noite', 'a noite'], run: () => chooseWorkoutPeriod('noite') },
     ];
     if (message.kind === 'groups' && message.group === 'Calistenia') return [
       { label: 'Tentar novamente', aliases: ['tentar novamente', 'repetir', 'nova busca'], run: () => void loadExercises(undefined, 'Calistenia') },
@@ -472,6 +576,10 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const choices = voiceChoicesFor(lastAssistantMessage);
     const match = matchVoiceChoice(text, choices);
     addMessage({ from: 'user', kind: 'text', text });
+    if (lastAssistantMessage?.kind === 'workout-time') {
+      submitWorkoutTime(text);
+      return;
+    }
     if (match) {
       match.run();
       return;
@@ -479,7 +587,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const prompt = choices.length
       ? `Não identifiquei uma opção para “${text}”. Escolha uma das opções mostradas (${choices.map(choice => choice.label).join(', ')}) ou tente novamente.`
       : `Recebi “${text}”, mas não consegui identificar uma opção nesta etapa. Escolha uma das opções disponíveis ou tente novamente.`;
-    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups', 'workout-level', 'workout-type', 'workout-group'].includes(lastAssistantMessage.kind)) {
+    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups', 'workout-level', 'workout-type', 'workout-group', 'workout-period'].includes(lastAssistantMessage.kind)) {
       addMessage({ from: 'assistant', kind: lastAssistantMessage.kind, group: lastAssistantMessage.group, text: prompt });
     } else {
       addMessage({ from: 'assistant', kind: 'text', text: prompt });
@@ -610,7 +718,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
               <button type="button" onClick={() => submitUserText('Montar treino')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-montar-treino"><Dumbbell size={15} /> Montar treino</button>
               <button type="button" onClick={() => submitUserText('Ver exercícios')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-ver-exercicios"><Activity size={15} /> Ver exercícios</button>
             </div>}
-            {['workout-level', 'workout-type', 'workout-group'].includes(message.kind) && <div className="costinha-chip-row" data-testid={`choices-${message.kind}`}>
+            {['workout-level', 'workout-type', 'workout-group', 'workout-period'].includes(message.kind) && <div className="costinha-chip-row" data-testid={`choices-${message.kind}`}>
               {voiceChoicesFor(message).map(choice => <button
                 className="costinha-chip"
                 type="button"
@@ -637,8 +745,8 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
           type="text"
           value={draft}
           onChange={event => setDraft(event.target.value)}
-          placeholder="Escreva ou fale com o Costinha"
-          aria-label="Mensagem para o Costinha"
+          placeholder={latestAssistantMessage?.kind === 'workout-time' ? 'Ex.: 19:30 ou sete da noite' : 'Escreva ou fale com o Costinha'}
+          aria-label={latestAssistantMessage?.kind === 'workout-time' ? 'Horário preferido para o treino' : 'Mensagem para o Costinha'}
           disabled={busy || listening}
           data-testid="input-costinha-message"
         />
