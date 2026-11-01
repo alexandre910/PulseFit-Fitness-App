@@ -160,17 +160,17 @@ function exerciseIdFromRelation(relation: RelacaoExercicio) {
   const id = Number(rawId);
   return Number.isFinite(id) ? id : undefined;
 }
+function exerciseVideoUrl(video?: string) {
+  const value = video?.trim();
+  if (!value) return '';
+  return /^https?:\/\//i.test(value) ? value : `https://www.youtube.com/watch?v=${encodeURIComponent(value)}`;
+}
 function useAgenda(cliente: Cliente | null) {
   return useQuery({ queryKey: ['agenda', cliente?.id], enabled: !!cliente, queryFn: async () => listFrom<AgendaItem>(await request<unknown>(`/api/agenda?idUsuario=${cliente?.id}`), 'agenda') });
 }
 function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
-}
-function demonstrationUrl(video?: string) {
-  const value = video?.trim();
-  if (!value) return '';
-  return /^https?:\/\//i.test(value) ? value : `https://www.youtube.com/watch?v=${encodeURIComponent(value)}`;
 }
 function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
@@ -368,7 +368,6 @@ function Treinos() {
   const form = useForm<{ nome: string; descricao: string; modalidade: string; nivel: string }>({
     defaultValues: { nome: '', descricao: '', modalidade: '', nivel: '' },
   });
-  const selectedModality = form.watch('modalidade');
   function openCreateForm() {
     setCreateError(''); setCreateNotice('');
     form.reset({ nome: suggestedWorkoutName(query.data?.length ?? 0), descricao: '', modalidade: '', nivel: '' });
@@ -423,8 +422,8 @@ function Treinos() {
     {showCreateForm && <div className="panel mb-6 p-5 sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><div><p className="eyebrow">NOVO PLANO</p><h2 className="display mt-1 text-3xl uppercase">Criar treino</h2></div><button type="button" className="btn btn-quiet p-2" onClick={() => setShowCreateForm(false)} aria-label="Fechar formulário" data-testid="button-fechar-criar-treino"><X size={18} /></button></div>
       <Form {...form}><form onSubmit={form.handleSubmit(create)} className="grid gap-4 sm:grid-cols-2">
         <FormField control={form.control} name="nome" rules={{ required: 'Informe o nome do treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Nome do treino</FormLabel><FormControl><Input {...field} className="field" placeholder="Treino A" data-testid="input-nome-treino" /></FormControl><FormMessage /></FormItem>} />
-        <FormField control={form.control} name="modalidade" rules={{ required: 'Selecione uma modalidade.' }} render={({ field }) => <FormItem><FormLabel className="label">Modalidade</FormLabel><FormControl><select {...field} onChange={(event) => { field.onChange(event); form.setValue('nivel', event.target.value === 'Musculacao' ? 'avancado' : ''); }} className="field" data-testid="select-modalidade-treino"><option value="">Selecione uma modalidade</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></FormControl><FormMessage /></FormItem>} />
-        {selectedModality === 'Musculacao' && <FormField control={form.control} name="nivel" rules={{ required: 'O nível avançado é obrigatório para musculação.' }} render={({ field }) => <FormItem><FormLabel className="label">Nível</FormLabel><FormControl><select {...field} className="field" data-testid="select-nivel-treino"><option value="avancado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />}
+        <FormField control={form.control} name="modalidade" rules={{ required: 'Selecione uma modalidade.' }} render={({ field }) => <FormItem><FormLabel className="label">Modalidade</FormLabel><FormControl><select {...field} className="field" data-testid="select-modalidade-treino"><option value="">Selecione uma modalidade</option><option value="Musculacao">Musculação</option><option value="Calistenia">Calistenia</option></select></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="nivel" render={({ field }) => <FormItem><FormLabel className="label">Nível <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><select {...field} className="field" data-testid="select-nivel-treino"><option value="">Sem nível definido</option><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></FormControl><FormMessage /></FormItem>} />
         <FormField control={form.control} name="descricao" render={({ field }) => <FormItem className="sm:col-span-2"><FormLabel className="label">Descrição <span className="normal-case text-[#7f8a9d]">(opcional)</span></FormLabel><FormControl><textarea {...field} rows={3} className="field resize-y" placeholder="Descreva o objetivo deste treino" data-testid="textarea-descricao-treino" /></FormControl><FormMessage /></FormItem>} />
         <div className="flex flex-wrap gap-3 sm:col-span-2"><Button type="submit" disabled={creating} className="btn btn-primary" data-testid="button-criar-treino">{creating ? 'Criando treino…' : 'Criar treino'}</Button><Button type="button" disabled={creating} className="btn btn-quiet" onClick={() => setShowCreateForm(false)} data-testid="button-cancelar-criar-treino">Cancelar</Button></div>
       </form></Form>
@@ -441,10 +440,18 @@ function Treinos() {
 }
 function TreinoDetalhe() {
   const params = useParams<{ id: string }>(); const id = Number(params.id);
-  const treinoQuery = useTreinos(useCliente());
-  const detail = useQuery({ queryKey: ['treino-detail', id], enabled: Number.isFinite(id), queryFn: async () => {
+  const cliente = useCliente();
+  const isBeginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
+  const treinoQuery = useTreinos(cliente);
+  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id), queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
     const settled = await Promise.allSettled(relations.map(async (relation) => {
+      if (isBeginner) {
+        if (!relation.exercicio || typeof relation.exercicio !== 'object') {
+          throw new Error('A API não retornou os dados completos deste exercício.');
+        }
+        return { relation, exercise: relation.exercicio };
+      }
       const exerciseId = relation.idExercicio ?? (typeof relation.id === 'object' ? relation.id?.idExercicio : undefined);
       if (!Number.isFinite(exerciseId)) throw new Error('A API não informou o exercício desta série.');
       return { relation, exercise: await request<Exercico>(`/api/exercicios/${exerciseId}`) };
@@ -462,9 +469,9 @@ function TreinoDetalhe() {
       {detail.data?.failedCount ? <div className="mb-4 rounded-xl border border-[#FFA21355] bg-[#FFA21312] p-3 text-sm text-[#ffc66e]" data-testid="status-dados-parciais">{detail.data.failedCount} exercício(s) não puderam ser carregados. O restante do treino está disponível.</div> : null}
       <div className="space-y-3">{detail.data?.exercises.map(({ relation, exercise }, index) => {
         const warmup = exercise.modalidade?.toLowerCase() === 'aquecimento';
-        const videoUrl = demonstrationUrl(exercise.demonstracaoVideo);
-        return <article key={`${relation.idExercicio}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id}`}>
-          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-4 inline-flex items-center" aria-label={`Assistir demonstração de ${exercise.nome}`} data-testid={`link-demo-exercicio-treino-${exercise.id}`}><Video size={16} className="mr-2" />Assistir demonstração<ArrowRight size={15} className="ml-2" /></a> : <p className="mt-4 text-xs text-[#8791a2]" data-testid={`status-demo-indisponivel-${exercise.id}`}>Demonstração indisponível.</p>}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
+        const videoUrl = isBeginner ? exerciseVideoUrl(exercise.demonstracaoVideo) : '';
+        return <article key={`${exercise.id ?? relation.idExercicio ?? 'exercise'}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id ?? index}`}>
+          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{isBeginner && (videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>)}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
         </article>;
       })}</div>
     </>}
@@ -538,7 +545,7 @@ function ExercicioDetalhe() {
   const params = useParams<{ id: string }>(); const id = Number(params.id);
   const query = useQuery({ queryKey: ['exercicio', id], enabled: Number.isFinite(id), queryFn: () => request<Exercico>(`/api/exercicios/${id}`) });
   const video = query.data?.demonstracaoVideo;
-  const videoUrl = demonstrationUrl(video);
+  const videoUrl = video ? (/^https?:\/\//i.test(video) ? video : `https://www.youtube.com/watch?v=${video}`) : '';
   return <div className="page-wrap"><Link href="/exercicios" className="mb-6 inline-flex items-center gap-2 text-sm text-[#9ba5b5]" data-testid="link-voltar-exercicios"><ArrowLeft size={16} /> Biblioteca de exercícios</Link>{query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : !query.data ? <EmptyState title="Exercício não encontrado." body="Este movimento não está disponível." /> : <article className="panel max-w-3xl p-6 sm:p-9" data-testid={`detail-exercicio-${id}`}><p className="eyebrow">GUIA DE MOVIMENTO</p><div className="mt-3 flex flex-wrap gap-2">{query.data.grupoMuscular && <span className="tag">{query.data.grupoMuscular}</span>}{query.data.modalidade && <ModalityTag value={query.data.modalidade} />}{query.data.nivel && <span className="tag">{query.data.nivel}</span>}</div><h1 className="page-title mt-5">{query.data.nome}</h1><p className="mt-5 text-base leading-relaxed text-[#aeb7c6]" data-testid="text-exercicio-descricao">{query.data.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-7 inline-flex items-center" data-testid="link-video-exercicio"><Video size={17} className="mr-2" />Assistir demonstração<ArrowRight size={15} className="ml-2" /></a> : <div className="mt-7 rounded-xl border border-[#344057] p-4 text-sm text-[#8791a2]" data-testid="status-video-indisponivel">Vídeo de demonstração não disponível para este exercício.</div>}</article>}</div>;
 }
 function Perfil() {

@@ -16,6 +16,7 @@ export type RelacaoExercicio = {
   idTreino?: number;
   idExercicio?: number;
   id?: number | { idTreino?: number; idExercicio?: number };
+  exercicio?: Exercico;
   series?: number;
   repeticoes?: string | number;
   carga?: string | number;
