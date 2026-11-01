@@ -1,14 +1,16 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Activity, ArrowRight, Dumbbell, ExternalLink, HeartPulse, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
-import { asArray, Exercico, friendlyError, getCliente, RelacaoExercicio, request, requestAudio, Treino } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { Activity, ArrowRight, Dumbbell, ExternalLink, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
+import { asArray, Exercico, friendlyError, getCliente, request, requestAudio, Treino } from '@/lib/api';
 import { useLocation } from 'wouter';
 
-type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'exercises' | 'workout';
-type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; warmups?: Exercico[]; mains?: Exercico[]; error?: boolean };
+type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'exercises';
+type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; error?: boolean };
 type Props = { avatarVideoUrl?: string };
 type LauncherPosition = { x: number; y: number };
 type LauncherDrag = { pointerId: number; startX: number; startY: number; origin: LauncherPosition; moved: boolean };
 type VoiceChoice = { label: string; aliases: string[]; run: () => void };
+type WorkoutRequest = { nivel: 'iniciante' | 'intermediario' | 'avancado'; tipo?: 'misto' | 'especifico'; grupo?: 'Perna' | 'Peito' | 'Braco' | 'Costas' };
 type SpeechAlternative = { transcript: string; confidence?: number };
 type SpeechResult = ArrayLike<SpeechAlternative>;
 type SpeechResultEvent = { resultIndex: number; results: ArrayLike<SpeechResult> };
@@ -115,11 +117,6 @@ function videoHref(value?: string) {
   } catch { return undefined; }
 }
 
-function exerciseId(relation: RelacaoExercicio) {
-  const nested = typeof relation.id === 'object' && relation.id ? relation.id.idExercicio : undefined;
-  return relation.idExercicio ?? nested;
-}
-
 function normalized(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -168,6 +165,7 @@ function matchVoiceChoice(value: string, choices: VoiceChoice[]) {
 
 export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const [path] = useLocation();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [initialPosition] = useState(() => loadLauncherPosition(path));
   const [position, setPosition] = useState<LauncherPosition>(initialPosition.position);
@@ -192,6 +190,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const positionCustomizedRef = useRef(initialPosition.customized);
   const dragRef = useRef<LauncherDrag | null>(null);
   const suppressClickRef = useRef(false);
+  const workoutRequestRef = useRef<WorkoutRequest | null>(null);
   openRef.current = open;
   positionRef.current = position;
   messagesRef.current = messages;
@@ -349,44 +348,75 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     } finally { setBusy(false); }
   };
 
-  const makeWorkout = async () => {
-    retryRef.current = () => { void makeWorkout(); };
+  const createAssistantWorkout = async (details: WorkoutRequest) => {
+    retryRef.current = () => { void createAssistantWorkout(details); };
     const client = getCliente();
     if (!client) {
-      addMessage({ from: 'assistant', kind: 'text', text: 'Para montar um treino rápido, entre na sua conta de cliente e volte a tentar.' });
+      addMessage({ from: 'assistant', kind: 'text', text: 'Para criar um treino, entre na sua conta de cliente e volte a tentar.' });
       return;
     }
     setBusy(true);
     try {
-      const created = await request<Treino>('/api/treinos/rapido', { method: 'POST', body: JSON.stringify({ idUsuario: client.id }) });
-      if (!created?.id) throw new Error('O treino foi criado, mas não foi possível identificar os exercícios.');
-      const relations = records<RelacaoExercicio>(await request(`/api/treinos/${created.id}/exercicios`));
-      const resolved = await Promise.all(relations.map(async relation => {
-        const id = exerciseId(relation);
-        return id == null ? null : request<Exercico>(`/api/exercicios/${id}`);
-      }));
-      const exercises = resolved.filter((item): item is Exercico => Boolean(item));
-      const warmups = exercises.filter(item =>
-        [item.modalidade, item.grupoMuscular, item.nome].some(value => value && normalized(value).includes('aquec')),
-      );
-      const mains: Exercico[] = [];
-      for (const group of ['Peito', 'Perna', 'Braco', 'Costas']) {
-        const match = exercises.find(item => !warmups.includes(item) && normalized(item.grupoMuscular ?? '').includes(normalized(group)));
-        if (match) mains.push(match);
+      const body = {
+        idUsuario: client.id,
+        nivel: details.nivel,
+        tipo: details.tipo,
+        ...(details.tipo === 'especifico' && details.grupo ? { grupo: details.grupo } : {}),
+      };
+      const response = await request<unknown>('/api/treinos/assistente', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      const payload = response && typeof response === 'object' && 'treino' in response
+        ? (response as { treino?: unknown }).treino
+        : response;
+      const created = payload as Treino | undefined;
+      if (!created || typeof created !== 'object' || !created.id) {
+        throw new Error('A API criou o treino, mas não retornou os dados esperados.');
       }
-      const spoken = exercises.length
-        ? `O seu treino rápido está pronto. ${warmups.length} exercícios de aquecimento e ${mains.length} exercícios principais. ${[...warmups, ...mains].map(item => [item.nome, item.descricao].filter(Boolean).join('. ')).filter(Boolean).join('. ')}`
-        : 'O treino foi criado, mas a API não devolveu exercícios para apresentar.';
-      addMessage({ from: 'assistant', kind: 'workout', warmups, mains, text: spoken }, spoken);
+      await queryClient.invalidateQueries({ queryKey: ['treinos', client.id] });
+      const name = created.nome?.trim() || 'seu treino';
+      addMessage({ from: 'assistant', kind: 'text', text: `Pronto! Criei o “${name}” pra você. Já pode ver ele na sua lista de treinos.` });
     } catch (error) {
       addMessage({ from: 'assistant', kind: 'text', text: friendlyError(error), error: true });
-      addMessage({ from: 'assistant', kind: 'actions' });
     } finally { setBusy(false); }
+  };
+
+  const chooseWorkoutLevel = (nivel: WorkoutRequest['nivel']) => {
+    workoutRequestRef.current = { nivel };
+    addMessage({ from: 'assistant', kind: 'workout-type', text: 'Você quer um treino misto (todos os grupos) ou um treino específico (só um grupo muscular)?' });
+  };
+
+  const chooseWorkoutType = (tipo: NonNullable<WorkoutRequest['tipo']>) => {
+    const current = workoutRequestRef.current;
+    if (!current) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Vamos começar de novo. Escolha “Montar treino” para selecionar o seu nível.' });
+      return;
+    }
+    const details: WorkoutRequest = { ...current, tipo };
+    workoutRequestRef.current = details;
+    if (tipo === 'misto') {
+      void createAssistantWorkout(details);
+      return;
+    }
+    addMessage({ from: 'assistant', kind: 'workout-group', text: 'Qual grupo muscular? Perna, peito, braço ou costas?' });
+  };
+
+  const chooseWorkoutGroup = (grupo: NonNullable<WorkoutRequest['grupo']>) => {
+    const current = workoutRequestRef.current;
+    if (!current) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Vamos começar de novo. Escolha “Montar treino” para selecionar o seu nível.' });
+      return;
+    }
+    const details: WorkoutRequest = { ...current, tipo: 'especifico', grupo };
+    workoutRequestRef.current = details;
+    void createAssistantWorkout(details);
   };
 
   const chooseAction = (action: 'workout' | 'exercises') => {
     if (action === 'workout') {
-      void makeWorkout();
+      workoutRequestRef.current = null;
+      addMessage({ from: 'assistant', kind: 'workout-level', text: 'Qual o seu nível? Iniciante, intermediário ou avançado?' });
       return;
     }
     addMessage({ from: 'assistant', kind: 'groups' });
@@ -406,6 +436,21 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     if (message.kind === 'actions') return [
       { label: 'Montar treino', aliases: ['montar treino', 'montar meu treino', 'criar treino', 'criar meu treino', 'montar treino rapido', 'treino rapido'], run: () => chooseAction('workout') },
       { label: 'Ver exercícios', aliases: ['ver exercicios', 'ver os exercicios', 'mostrar exercicios', 'exercicios'], run: () => chooseAction('exercises') },
+    ];
+    if (message.kind === 'workout-level') return [
+      { label: 'Iniciante', aliases: ['iniciante', 'nivel iniciante'], run: () => chooseWorkoutLevel('iniciante') },
+      { label: 'Intermediário', aliases: ['intermediario', 'intermediaria', 'nivel intermediario', 'nivel intermediario'], run: () => chooseWorkoutLevel('intermediario') },
+      { label: 'Avançado', aliases: ['avancado', 'avancada', 'nivel avancado'], run: () => chooseWorkoutLevel('avancado') },
+    ];
+    if (message.kind === 'workout-type') return [
+      { label: 'Treino misto', aliases: ['treino misto', 'misto', 'todos os grupos', 'todos grupos'], run: () => chooseWorkoutType('misto') },
+      { label: 'Treino específico', aliases: ['treino especifico', 'especifico', 'grupo muscular', 'um grupo muscular'], run: () => chooseWorkoutType('especifico') },
+    ];
+    if (message.kind === 'workout-group') return [
+      { label: 'Perna', aliases: ['perna', 'pernas'], run: () => chooseWorkoutGroup('Perna') },
+      { label: 'Peito', aliases: ['peito', 'peitoral'], run: () => chooseWorkoutGroup('Peito') },
+      { label: 'Braço', aliases: ['braco', 'bracos', 'biceps', 'triceps'], run: () => chooseWorkoutGroup('Braco') },
+      { label: 'Costas', aliases: ['costas'], run: () => chooseWorkoutGroup('Costas') },
     ];
     if (message.kind === 'groups' && message.group === 'Calistenia') return [
       { label: 'Tentar novamente', aliases: ['tentar novamente', 'repetir', 'nova busca'], run: () => void loadExercises(undefined, 'Calistenia') },
@@ -434,7 +479,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const prompt = choices.length
       ? `Não identifiquei uma opção para “${text}”. Escolha uma das opções mostradas (${choices.map(choice => choice.label).join(', ')}) ou tente novamente.`
       : `Recebi “${text}”, mas não consegui identificar uma opção nesta etapa. Escolha uma das opções disponíveis ou tente novamente.`;
-    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups'].includes(lastAssistantMessage.kind)) {
+    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups', 'workout-level', 'workout-type', 'workout-group'].includes(lastAssistantMessage.kind)) {
       addMessage({ from: 'assistant', kind: lastAssistantMessage.kind, group: lastAssistantMessage.group, text: prompt });
     } else {
       addMessage({ from: 'assistant', kind: 'text', text: prompt });
@@ -565,12 +610,21 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
               <button type="button" onClick={() => submitUserText('Montar treino')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-montar-treino"><Dumbbell size={15} /> Montar treino</button>
               <button type="button" onClick={() => submitUserText('Ver exercícios')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-ver-exercicios"><Activity size={15} /> Ver exercícios</button>
             </div>}
+            {['workout-level', 'workout-type', 'workout-group'].includes(message.kind) && <div className="costinha-chip-row" data-testid={`choices-${message.kind}`}>
+              {voiceChoicesFor(message).map(choice => <button
+                className="costinha-chip"
+                type="button"
+                key={choice.label}
+                disabled={busy || listening || message.id !== activeChoiceMessageId}
+                onClick={() => submitUserText(choice.label)}
+                data-testid={`button-${message.kind}-${normalizedSpeech(choice.label).replace(/\s+/g, '-')}`}
+              >{choice.label}<ArrowRight size={13} /></button>)}
+            </div>}
             {message.kind === 'groups' && <div className="costinha-chip-row" data-testid="choices-exercise-groups">
               {message.group === 'Calistenia'
                 ? <button className="costinha-chip" type="button" disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText('Tentar novamente')} data-testid="button-retry-calistenia">Tentar novamente<RotateCcw size={13} /></button>
                 : GROUPS.map(group => <button className="costinha-chip" type="button" key={group.api} disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText(group.label)} data-testid={`button-group-${group.api.toLowerCase()}`}>{group.label}<ArrowRight size={13} /></button>)}
             </div>}
-            {message.kind === 'workout' && <WorkoutCards warmups={message.warmups ?? []} mains={message.mains ?? []} />}
             {message.kind === 'exercises' && <ExerciseCards items={message.items ?? []} />}
           </div>
         </div>)}
@@ -639,14 +693,5 @@ function ExerciseCards({ items }: { items: Exercico[] }) {
         <div className="costinha-exercise-meta">{exercise.nivel && <span>{exercise.nivel}</span>}{href && <a href={href} target="_blank" rel="noreferrer" data-testid={`link-exercise-video-${exercise.id ?? index}`}><ExternalLink size={13} /> Ver demonstração</a>}</div>
       </article>;
     })}
-  </div>;
-}
-
-function WorkoutCards({ warmups, mains }: { warmups: Exercico[]; mains: Exercico[] }) {
-  if (!warmups.length && !mains.length) return <div className="costinha-empty" data-testid="state-workout-empty">A API não devolveu exercícios para este treino. Não adicionámos exercícios que não estejam no seu plano.</div>;
-  return <div className="costinha-workout-results" data-testid="list-workout-results">
-    {warmups.length > 0 && <section><h3 className="costinha-section-label"><HeartPulse size={14} /> Aquecimento</h3><ExerciseCards items={warmups} /></section>}
-    {mains.length > 0 && <section><h3 className="costinha-section-label"><Dumbbell size={14} /> Parte principal</h3><ExerciseCards items={mains} /></section>}
-    {!mains.length && <p className="costinha-no-main" data-testid="text-no-main-exercises">Não foram encontrados exercícios principais para os grupos previstos.</p>}
   </div>;
 }

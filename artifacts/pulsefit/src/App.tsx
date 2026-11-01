@@ -6,7 +6,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { API_BASE, clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
+import { clearCliente, Cliente, Exercico, friendlyError, getCliente, isQuestionarioPendente, request, saveCliente, setQuestionarioPendente, Treino, RelacaoExercicio, AgendaItem } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import NotFound from '@/pages/not-found';
 import CostinhaAssistant from '@/components/costinha-assistant';
@@ -137,26 +137,11 @@ function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
     staleTime: alwaysFresh ? 0 : undefined,
     refetchOnMount: alwaysFresh ? 'always' : undefined,
     queryFn: async () => {
-      if (!cliente) throw new Error('Entre na sua conta para carregar os treinos.');
-      const idUsuario = Number(cliente.id);
-      if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
-        throw new Error('Não foi possível identificar o cliente conectado. Entre novamente.');
-      }
-      const path = `/api/treinos/usuario/${idUsuario}`;
-      const response = await request<unknown>(path);
-      if (import.meta.env.DEV) {
-        console.info('[PulseFit] Resposta de treinos do cliente', {
-          idUsuario,
-          endpoint: `${API_BASE}${path}`,
-          resposta: response,
-        });
-      }
-      const validEnvelope = Array.isArray(response) ||
-        (typeof response === 'object' && response !== null && Array.isArray((response as { treinos?: unknown }).treinos));
-      if (!validEnvelope) {
-        throw new Error('A API retornou um formato inesperado ao carregar os treinos.');
-      }
-      return listFrom<Treino>(response, 'treinos');
+      const data = await request<unknown>('/api/treinos');
+      const clienteId = Number(cliente?.id);
+      return listFrom<Treino>(data, 'treinos').filter((item) =>
+        Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
+      );
     },
   });
 }
@@ -187,26 +172,18 @@ function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
 }
-function WorkoutCard({ workout, onDelete }: { workout: Treino; onDelete?: () => void }) {
+function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
-  const locked = workout.liberado !== true;
-  const summary = <>
-    <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
-    <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
-  </>;
   return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
     <div className="h-1.5" style={{ backgroundColor: color }} />
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-wrap gap-2"><ModalityTag value={workout.modalidade} />
-          {workout.concluido === true && <span className="tag bg-[#056c5c] text-white" data-testid={`tag-treino-concluido-${workout.id}`}><Check size={12} className="mr-1" />Concluído</span>}
-        </div>
-        {locked ? <span className="tag" aria-label="Treino bloqueado"><LockKeyhole size={13} /></span> : <span className="text-[#8994a6]"><ChevronRight size={18} /></span>}
-      </div>
-      {locked ? <div className="block cursor-not-allowed" aria-disabled="true">{summary}</div> : <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>{summary}</Link>}
-      {locked && <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-[#ffc66e]" role="status" data-testid={`status-treino-bloqueado-${workout.id}`}><LockKeyhole size={14} className="mt-0.5 shrink-0" />Conclua o treino anterior na agenda para liberar</p>}
+      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]"><ChevronRight size={18} /></span></div>
+      <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
+        <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
+      </Link>
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
-        {workout.podeExcluir === true && onDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir treino ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={20} /><span className="text-xs">Excluir treino</span></Button>}
+        {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={25} /><span className="text-xs">Excluir</span></Button>}
       </div>
     </div>
   </article>;
@@ -373,12 +350,12 @@ function Inicio() {
       <section className="relative mb-7 overflow-hidden rounded-[20px] border border-[#ffa21335] bg-[#202b40] p-6 sm:p-9"><div className="absolute -right-12 -top-12 h-56 w-56 rounded-full border border-[#ffa21326] shadow-[0_0_0_24px_#ffa21308,0_0_0_56px_#ffa21305]" /><div className="relative z-10 max-w-xl"><p className="eyebrow">SEU PRÓXIMO MOVIMENTO</p><h2 className="display mt-2 text-4xl uppercase leading-[.92] sm:text-6xl">{upcoming ? agendaTrain?.nome || 'Treino na agenda' : 'Construa sua consistência.'}</h2><p className="mt-3 max-w-md text-sm text-[#9ca6b6]">{upcoming ? `Sua sessão está marcada para ${new Date(upcoming.dataAgendada).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}.` : 'Escolha um treino e marque na sua agenda. O progresso é feito de pequenos começos.'}</p><Link href={upcoming ? '/agenda' : '/treinos'} className="btn btn-primary mt-5 inline-flex items-center" data-testid="link-proximo-passo">{upcoming ? 'Ver minha agenda' : 'Encontrar meu treino'}<ArrowRight size={16} className="ml-2" /></Link></div><div className="absolute bottom-5 right-8 hidden text-[#FFA213] opacity-80 sm:block"><Flame size={76} strokeWidth={1} /></div></section>
       <div className="mb-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#056C5C33] text-[#6ad8bd]"><Dumbbell size={19} /></span><div><p className="text-xs text-[#95a0b1]">TREINOS DISPONÍVEIS</p><p className="display text-3xl">{workouts.data?.length ?? 0}</p></div></div></div><div className="panel-soft p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFA21320] text-[#FFA213]"><CalendarDays size={19} /></span><div><p className="text-xs text-[#95a0b1]">SESSÕES NA AGENDA</p><p className="display text-3xl">{agenda.data?.filter((item) => item.status !== 'CONCLUIDO').length ?? 0}</p></div></div></div><div className="panel-soft p-5" data-testid="card-progresso-agenda"><div className="flex items-center justify-between gap-3"><div><p className="text-xs text-[#95a0b1]">PROGRESSO DA AGENDA</p><p className="display text-3xl" data-testid="text-progresso-geral">{progressPercent}%</p></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#BA165022] text-[#ff82a8]"><Check size={19} /></span></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#344057]"><div className="h-full rounded-full bg-[#FFA213] transition-all" style={{ width: `${progressPercent}%` }} /></div><p className="mt-2 text-xs text-[#95a0b1]">{completedSessions} de {totalSessions} sessões concluídas</p></div></div>
       <div className="mb-4 flex items-end justify-between"><div><p className="eyebrow">FEITO PARA VOCÊ</p><h2 className="display mt-1 text-3xl uppercase">Seus treinos</h2></div><Link href="/treinos" className="text-sm font-bold text-[#FFA213]" data-testid="link-ver-treinos">Ver todos <ArrowRight size={14} className="inline" /></Link></div>
-      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
+      {workouts.data?.length ? <div className="grid gap-4 sm:grid-cols-2">{workouts.data.slice(0,2).map((t) => <WorkoutCard key={t.id} workout={t} canDelete={false} onDelete={() => {}} />)}</div> : <EmptyState title="Seu espaço está pronto." body={workouts.error ? 'Não foi possível carregar seus treinos agora.' : 'Ainda não há treinos disponíveis para sua conta. Volte em breve.'} />}
     </div>}
   </div>;
 }
 function Treinos() {
-  const cliente = useCliente(); const query = useTreinos(cliente, true);
+  const cliente = useCliente(); const query = useTreinos(cliente);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Treino | null>(null);
@@ -452,10 +429,10 @@ function Treinos() {
       </form></Form>
     </div>}
     {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} onDelete={t.podeExcluir === true ? () => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); } : undefined} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Number(t.idUsuarioAvancado) === Number(cliente?.id)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
     <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
       <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
-        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Deseja excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel disabled={deleting} className="btn btn-quiet">Cancelar</AlertDialogCancel><Button type="button" disabled={deleting} className="btn btn-primary bg-[#a83232] text-white hover:bg-[#8e2929]" onClick={deleteWorkout} data-testid="button-confirmar-excluir-treino">{deleting ? 'Excluindo…' : 'Excluir treino'}</Button></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -466,8 +443,7 @@ function TreinoDetalhe() {
   const cliente = useCliente();
   const isBeginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
   const treinoQuery = useTreinos(cliente);
-  const treino = treinoQuery.data?.find((item) => item.id === id);
-  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id) && treino?.liberado === true, queryFn: async () => {
+  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id), queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
     const settled = await Promise.allSettled(relations.map(async (relation) => {
       if (isBeginner) {
@@ -484,17 +460,18 @@ function TreinoDetalhe() {
     exercises.sort((a,b) => Number(b.exercise.modalidade?.toLowerCase() === 'aquecimento') - Number(a.exercise.modalidade?.toLowerCase() === 'aquecimento'));
     return { exercises, failedCount: settled.length - exercises.length };
   } });
+  const treino = treinoQuery.data?.find((item) => item.id === id);
   return <div className="page-wrap"><Link href="/treinos" className="mb-6 inline-flex items-center gap-2 text-sm text-[#9ba5b5]" data-testid="link-voltar-treinos"><ArrowLeft size={16} /> Todos os treinos</Link>
-    {treinoQuery.isLoading || (treino?.liberado === true && detail.isLoading) ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : treino.liberado !== true ? <EmptyState title="Treino bloqueado." body="Conclua o treino anterior na agenda para liberar." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : <>
+    {treinoQuery.isLoading || detail.isLoading ? <PageLoading /> : treinoQuery.error ? <ErrorState message={friendlyError(treinoQuery.error)} retry={() => treinoQuery.refetch()} /> : !treino ? <EmptyState title="Treino não encontrado." body="Este treino não está disponível na sua lista." action={<Link href="/treinos" className="btn btn-quiet" data-testid="link-voltar-lista">Voltar aos treinos</Link>} /> : <>
       <Heading kicker="DETALHES DO TREINO" title={treino.nome} detail={treino.descricao || 'Uma sessão para avançar no seu ritmo.'}><ModalityTag value={treino.modalidade} /></Heading>
       {detail.error && <ErrorState message={friendlyError(detail.error)} retry={() => detail.refetch()} />}
       {!detail.error && detail.data?.exercises.length === 0 && <EmptyState title="Exercícios indisponíveis." body="Este treino ainda não tem exercícios cadastrados." />}
       {detail.data?.failedCount ? <div className="mb-4 rounded-xl border border-[#FFA21355] bg-[#FFA21312] p-3 text-sm text-[#ffc66e]" data-testid="status-dados-parciais">{detail.data.failedCount} exercício(s) não puderam ser carregados. O restante do treino está disponível.</div> : null}
       <div className="space-y-3">{detail.data?.exercises.map(({ relation, exercise }, index) => {
         const warmup = exercise.modalidade?.toLowerCase() === 'aquecimento';
-        const videoUrl = exerciseVideoUrl(exercise.demonstracaoVideo);
+        const videoUrl = isBeginner ? exerciseVideoUrl(exercise.demonstracaoVideo) : '';
         return <article key={`${exercise.id ?? relation.idExercicio ?? 'exercise'}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id ?? index}`}>
-          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" aria-label={`Assistir demonstração de ${exercise.nome}`} className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
+          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{isBeginner && (videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>)}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
         </article>;
       })}</div>
     </>}
@@ -505,12 +482,11 @@ function Agenda() {
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busyId, setBusyId] = useState<number | null>(null); const [showForm, setShowForm] = useState(false);
   const today = new Date(); const maxDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const form = useForm<{ idTreino: string; dataAgendada: string }>({ defaultValues: { idTreino: '', dataAgendada: '' } });
-  const liberados = (treinos.data || []).filter((treino) => treino.liberado === true);
   async function create(values: { idTreino: string; dataAgendada: string }) {
     if (!cliente) return;
     setError(''); setNotice('');
     const idTreino = Number(values.idTreino);
-    if (!Number.isInteger(idTreino) || !liberados.some((treino) => Number(treino.id) === idTreino)) {
+    if (!Number.isInteger(idTreino) || !treinos.data?.some((treino) => Number(treino.id) === idTreino)) {
       setError('Selecione um treino disponível para sua conta.');
       return;
     }
@@ -524,7 +500,7 @@ function Agenda() {
   }
   async function complete(item: AgendaItem) {
     setBusyId(item.id); setError(''); setNotice('');
-    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await Promise.all([query.refetch(), treinos.refetch()]); }
+    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await query.refetch(); }
     catch (e) { setError(friendlyError(e)); } finally { setBusyId(null); }
   }
   const ordered = [...(query.data || [])].sort((a,b) => new Date(a.dataAgendada).getTime() - new Date(b.dataAgendada).getTime());
@@ -533,9 +509,9 @@ function Agenda() {
   return <div className="page-wrap"><Heading kicker="RITMO E CONSTÂNCIA" title="Sua agenda" detail="Planeje seu próximo encontro com o movimento."><button className="btn btn-primary inline-flex items-center justify-center" onClick={() => setShowForm((v) => !v)} data-testid="button-novo-agendamento">{showForm ? <X size={16} className="mr-2" /> : <CalendarDays size={16} className="mr-2" />}{showForm ? 'Fechar' : 'Agendar treino'}</button></Heading>
     {error && <div className="error-box mb-5" role="alert" data-testid="status-agenda-error">{error}</div>}{notice && <div className="mb-5 rounded-xl border border-[#056c5c] bg-[#056c5c22] p-3 text-sm text-[#8ce1c8]" role="status" data-testid="status-agenda-success">{notice}</div>}
     {showForm && <div className="panel mb-6 p-5 sm:p-6"><h2 className="display mb-5 text-3xl uppercase">Marque seu próximo treino</h2><Form {...form}><form className="grid gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit(create)}>
-       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" disabled={!liberados.length} data-testid="select-agenda-treino"><option value="">{liberados.length ? 'Selecione um treino' : 'Nenhum treino liberado'}</option>{liberados.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
+       <FormField control={form.control} name="idTreino" rules={{ required: 'Escolha um treino.' }} render={({ field }) => <FormItem><FormLabel className="label">Treino</FormLabel><FormControl><select {...field} className="field" data-testid="select-agenda-treino"><option value="">Selecione um treino</option>{treinos.data?.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></FormControl><FormMessage /></FormItem>} />
       <FormField control={form.control} name="dataAgendada" rules={{ required: 'Escolha uma data e horário.' }} render={({ field }) => <FormItem><FormLabel className="label">Data e horário</FormLabel><FormControl><Input {...field} type="datetime-local" min={minInput} max={maxInput} className="field" data-testid="input-agenda-data" /></FormControl><FormMessage /></FormItem>} />
-       <Button type="submit" disabled={!liberados.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
+      <Button type="submit" disabled={!treinos.data?.length} className="btn btn-primary sm:col-span-2 sm:w-fit" data-testid="button-salvar-agendamento">Salvar na agenda</Button>
     </form></Form></div>}
      {(query.isLoading || treinos.isLoading) ? <PageLoading /> : query.error || treinos.error ? <ErrorState message={friendlyError(query.error || treinos.error)} retry={() => { query.refetch(); treinos.refetch(); }} /> : !ordered.length ? <EmptyState title="Sua agenda está livre." body="Escolha um treino e reserve um momento para você." action={<button className="btn btn-primary" onClick={() => setShowForm(true)} data-testid="button-agendar-vazio">Agendar um treino</button>} /> : <div className="space-y-3">{ordered.map((item) => {
       const workout = treinos.data?.find((t) => t.id === item.idTreino);
