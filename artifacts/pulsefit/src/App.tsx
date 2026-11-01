@@ -167,6 +167,11 @@ function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
 }
+function demonstrationUrl(video?: string) {
+  const value = video?.trim();
+  if (!value) return '';
+  return /^https?:\/\//i.test(value) ? value : `https://www.youtube.com/watch?v=${encodeURIComponent(value)}`;
+}
 function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
   return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
@@ -457,8 +462,9 @@ function TreinoDetalhe() {
       {detail.data?.failedCount ? <div className="mb-4 rounded-xl border border-[#FFA21355] bg-[#FFA21312] p-3 text-sm text-[#ffc66e]" data-testid="status-dados-parciais">{detail.data.failedCount} exercício(s) não puderam ser carregados. O restante do treino está disponível.</div> : null}
       <div className="space-y-3">{detail.data?.exercises.map(({ relation, exercise }, index) => {
         const warmup = exercise.modalidade?.toLowerCase() === 'aquecimento';
+        const videoUrl = demonstrationUrl(exercise.demonstracaoVideo);
         return <article key={`${relation.idExercicio}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id}`}>
-          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p></div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
+          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-4 inline-flex items-center" aria-label={`Assistir demonstração de ${exercise.nome}`} data-testid={`link-demo-exercicio-treino-${exercise.id}`}><Video size={16} className="mr-2" />Assistir demonstração<ArrowRight size={15} className="ml-2" /></a> : <p className="mt-4 text-xs text-[#8791a2]" data-testid={`status-demo-indisponivel-${exercise.id}`}>Demonstração indisponível.</p>}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
         </article>;
       })}</div>
     </>}
@@ -532,7 +538,7 @@ function ExercicioDetalhe() {
   const params = useParams<{ id: string }>(); const id = Number(params.id);
   const query = useQuery({ queryKey: ['exercicio', id], enabled: Number.isFinite(id), queryFn: () => request<Exercico>(`/api/exercicios/${id}`) });
   const video = query.data?.demonstracaoVideo;
-  const videoUrl = video ? (/^https?:\/\//i.test(video) ? video : `https://www.youtube.com/watch?v=${video}`) : '';
+  const videoUrl = demonstrationUrl(video);
   return <div className="page-wrap"><Link href="/exercicios" className="mb-6 inline-flex items-center gap-2 text-sm text-[#9ba5b5]" data-testid="link-voltar-exercicios"><ArrowLeft size={16} /> Biblioteca de exercícios</Link>{query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : !query.data ? <EmptyState title="Exercício não encontrado." body="Este movimento não está disponível." /> : <article className="panel max-w-3xl p-6 sm:p-9" data-testid={`detail-exercicio-${id}`}><p className="eyebrow">GUIA DE MOVIMENTO</p><div className="mt-3 flex flex-wrap gap-2">{query.data.grupoMuscular && <span className="tag">{query.data.grupoMuscular}</span>}{query.data.modalidade && <ModalityTag value={query.data.modalidade} />}{query.data.nivel && <span className="tag">{query.data.nivel}</span>}</div><h1 className="page-title mt-5">{query.data.nome}</h1><p className="mt-5 text-base leading-relaxed text-[#aeb7c6]" data-testid="text-exercicio-descricao">{query.data.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-7 inline-flex items-center" data-testid="link-video-exercicio"><Video size={17} className="mr-2" />Assistir demonstração<ArrowRight size={15} className="ml-2" /></a> : <div className="mt-7 rounded-xl border border-[#344057] p-4 text-sm text-[#8791a2]" data-testid="status-video-indisponivel">Vídeo de demonstração não disponível para este exercício.</div>}</article>}</div>;
 }
 function Perfil() {
