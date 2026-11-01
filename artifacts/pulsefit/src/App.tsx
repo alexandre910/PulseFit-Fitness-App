@@ -137,11 +137,9 @@ function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
     staleTime: alwaysFresh ? 0 : undefined,
     refetchOnMount: alwaysFresh ? 'always' : undefined,
     queryFn: async () => {
-      const data = await request<unknown>('/api/treinos');
-      const clienteId = Number(cliente?.id);
-      return listFrom<Treino>(data, 'treinos').filter((item) =>
-        Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
-      );
+      if (!cliente) return [];
+      const data = await request<unknown>(`/api/treinos/usuario/${cliente.id}`);
+      return listFrom<Treino>(data, 'treinos');
     },
   });
 }
