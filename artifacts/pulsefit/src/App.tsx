@@ -46,13 +46,13 @@ function Navigation({ path, mobile = false }: { path: string; mobile?: boolean }
     {!mobile && <div className="absolute bottom-7 left-5 right-5 panel-soft p-4"><p className="eyebrow">UM DIA DE CADA VEZ</p><p className="mt-2 text-xs leading-relaxed text-[#9ca6b6]">Consistência vence intensidade. Sua próxima versão começa no próximo treino.</p></div>}
   </nav>;
 }
-function AuthBrand() { return <Link href="/login" className="brand" data-testid="link-brand">PULSE<i>FIT</i></Link>; }
+function AuthBrand() { return <Link href="/login" className="brand" data-testid="link-brand">MOVE<i>FIT</i></Link>; }
 function AuthLayout({ children }: { children: ReactNode }) {
   return <div className="auth-layout"><section className="auth-side"><AuthBrand /><div className="auth-art enter">MOVIMENTO<span>MUDA TUDO.</span></div><p className="relative z-10 max-w-xs text-sm text-[#95a0b1]">Seu treino, seu ritmo. Um companheiro para transformar intenção em consistência.</p></section><section className="auth-form-side">{children}</section></div>;
 }
 function AppShell({ children }: { children: ReactNode }) {
   const [path] = useLocation();
-  return <div className="app-shell"><Navigation path={path} /><div className="main-with-nav"><header className="topbar"><Link href="/inicio" className="brand text-[25px] md:hidden" data-testid="link-brand-mobile">PULSE<i>FIT</i></Link><span className="hidden text-xs text-[#778297] md:block">SEU ESPAÇO DE TREINO</span><Link href="/perfil" className="flex items-center gap-2 text-sm font-semibold text-[#b4bdca]" data-testid="link-top-profile"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#344057] text-[#FFA213]"><UserRound size={16} /></span>Minha conta</Link></header><main>{children}</main></div><Navigation path={path} mobile /></div>;
+  return <div className="app-shell"><Navigation path={path} /><div className="main-with-nav"><header className="topbar"><Link href="/inicio" className="brand text-[25px] md:hidden" data-testid="link-brand-mobile">MOVE<i>FIT</i></Link><span className="hidden text-xs text-[#778297] md:block">SEU ESPAÇO DE TREINO</span><Link href="/perfil" className="flex items-center gap-2 text-sm font-semibold text-[#b4bdca]" data-testid="link-top-profile"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#344057] text-[#FFA213]"><UserRound size={16} /></span>Minha conta</Link></header><main>{children}</main></div><Navigation path={path} mobile /></div>;
 }
 function Protected({ children }: { children: ReactNode }) {
   const cliente = useCliente();
