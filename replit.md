@@ -1,10 +1,10 @@
-# PulseFit
+# MoveFit
 
-PulseFit is a Portuguese-language fitness app for managing training plans, schedules, exercises, and user profiles through an existing REST API.
+MoveFit is a Portuguese-language fitness app for managing training plans, schedules, exercises, and user profiles through an existing REST API.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/pulsefit run dev` — run the PulseFit frontend
+- `pnpm --filter @workspace/pulsefit run dev` — run the MoveFit frontend
 - `pnpm --filter @workspace/pulsefit run typecheck` — check the frontend types
 - `pnpm run typecheck` — full typecheck across all packages
 - API base: `https://shaded-jot-pacify.ngrok-free.dev` — use this Java API directly; do not redirect requests to localhost or replace API data with local/mock fallbacks.
@@ -15,21 +15,21 @@ PulseFit is a Portuguese-language fitness app for managing training plans, sched
 - Frontend: React + Vite + TypeScript
 - Upstream REST API: existing Java/Spring Boot service; frontend sends `ngrok-skip-browser-warning: true`
 - Session: browser localStorage, without storing the returned password
-- PulseFit does not own a backend, database, or business logic
+- MoveFit does not own a backend, database, or business logic
 
 ## Where things live
 
 - `artifacts/pulsefit/src/App.tsx` — application screens and navigation
 - `artifacts/pulsefit/src/lib/api.ts` — upstream API requests, response types, and local session
-- `artifacts/pulsefit/src/index.css` — PulseFit theme and responsive styles
+- `artifacts/pulsefit/src/index.css` — MoveFit theme and responsive styles
 
 ## Architecture decisions
 
-- Do not add a PulseFit backend or database; all business logic and stored data belong to the existing Spring Boot API.
+- Do not add a MoveFit backend or database; all business logic and stored data belong to the existing Spring Boot API.
 - Do not fetch exercise content from third-party APIs; use the upstream API's exercise endpoints and videos.
 - Keep the upstream API base configurable because the provided ngrok URL is temporary.
 - Do not set up paid Replit AI integrations. The nutrition assistant will call the user's forthcoming Gemini endpoint on their Java backend; its API key stays on that backend.
-- Keep all new assistant UI frontend-only in PulseFit; use the Java API for voice, training, and exercise data.
+- Keep all new assistant UI frontend-only in MoveFit; use the Java API for voice, training, and exercise data.
 
 ## Product
 

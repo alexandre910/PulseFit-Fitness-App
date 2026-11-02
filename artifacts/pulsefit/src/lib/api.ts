@@ -43,7 +43,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       headers: apiHeaders(init.headers),
     });
   } catch {
-    throw new ApiError('Não foi possível conectar ao PulseFit. Confira sua conexão e tente novamente.', 0);
+    throw new ApiError('Não foi possível conectar ao MoveFit. Confira sua conexão e tente novamente.', 0);
   }
   const raw = await response.text();
   let payload: any = undefined;

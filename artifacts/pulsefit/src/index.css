@@ -134,7 +134,7 @@ a { color: inherit; text-decoration: none; }
 .workout-card { overflow:hidden; border:1px solid rgba(204,204,204,.1); border-radius:16px; transition:transform .2s,border-color .2s; }
 .workout-card:hover { transform:translateY(-3px); border-color:rgba(255,162,19,.35); }
 
-/* Costinha — a compact training-room conversation, anchored in PulseFit's palette. */
+/* Costinha — a compact training-room conversation, anchored in MoveFit's palette. */
 .costinha-root { position:fixed; z-index:80; font-family:var(--app-font-sans); }
 .costinha-panel { position:absolute; right:0; bottom:76px; display:flex; flex-direction:column; width:min(420px,calc(100vw - 36px)); height:min(690px,calc(100dvh - 124px)); min-height:380px; overflow:hidden; border:1px solid rgba(255,162,19,.24); border-radius:22px; background:linear-gradient(145deg,#202c42 0%,#19253a 100%); box-shadow:0 24px 80px rgba(3,9,20,.55),0 0 0 1px rgba(255,255,255,.025) inset; animation:costinha-enter .25s ease-out both; }
 .costinha-header { display:flex; align-items:center; gap:13px; padding:17px 18px; border-bottom:1px solid rgba(204,204,204,.09); background:rgba(15,25,42,.38); }
