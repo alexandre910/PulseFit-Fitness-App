@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Plus, Search, Trash2, UserRound, Video, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Eye, EyeOff, Flame, House, LockKeyhole, LogOut, Plus, Search, Trash2, UserRound, Video, X } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,7 @@ function Login() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<{ email: string; senha: string }>({ defaultValues: { email: '', senha: '' } });
   async function submit(values: { email: string; senha: string }) {
     setBusy(true); setError('');
@@ -82,7 +83,7 @@ function Login() {
     {error && <div className="error-box mt-6" role="alert" data-testid="status-login-error">{error}</div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-7 space-y-5">
       <FormField control={form.control} name="email" rules={{ required: 'Informe seu e-mail.' }} render={({ field }) => <FormItem><FormLabel className="label">E-mail</FormLabel><FormControl><Input className="field" type="email" autoComplete="email" placeholder="voce@email.com" data-testid="input-email" {...field} /></FormControl><FormMessage /></FormItem>} />
-      <FormField control={form.control} name="senha" rules={{ required: 'Informe sua senha.' }} render={({ field }) => <FormItem><FormLabel className="label">Senha</FormLabel><FormControl><Input className="field" type="password" autoComplete="current-password" placeholder="Sua senha" data-testid="input-senha" {...field} /></FormControl><FormMessage /></FormItem>} />
+      <FormField control={form.control} name="senha" rules={{ required: 'Informe sua senha.' }} render={({ field }) => <FormItem><FormLabel className="label">Senha</FormLabel><div className="relative"><FormControl><Input className="field" style={{ paddingRight: '3rem' }} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Sua senha" data-testid="input-senha" {...field} /></FormControl><button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-[#929daf] transition-colors hover:text-[#FFA213] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} data-testid="button-toggle-senha-login" onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div><FormMessage /></FormItem>} />
       <Button disabled={busy} className="btn btn-primary w-full" type="submit" data-testid="button-login">{busy ? 'Entrando…' : 'Entrar na minha conta'}<ArrowRight size={17} className="ml-2" /></Button>
     </form></Form>
     <p className="mt-6 text-center text-sm text-[#9ca6b6]">Ainda não tem conta? <Link href="/cadastro" className="font-bold" style={{ color: '#FFA213' }} data-testid="link-cadastro">Criar cadastro</Link></p>
@@ -92,6 +93,7 @@ function Cadastro() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<{ nome: string; email: string; senha: string; idade: string; sexo: string; nivelExperiencia: string }>({ defaultValues: { nome: '', email: '', senha: '', idade: '', sexo: '', nivelExperiencia: '' } });
   async function submit(values: { nome: string; email: string; senha: string; idade: string; sexo: string; nivelExperiencia: string }) {
     setBusy(true); setError('');
@@ -100,7 +102,7 @@ function Cadastro() {
       setLocation('/login');
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
   }
-  const field = (name: 'nome' | 'email' | 'senha' | 'idade', label: string, type = 'text', placeholder = '') => <FormField key={name} control={form.control} name={name} rules={{ required: `Informe ${label.toLowerCase()}.`, ...(name === 'idade' ? { min: { value: 13, message: 'É necessário ter pelo menos 13 anos.' } } : {}) }} render={({ field: inputField }) => <FormItem><FormLabel className="label">{label}</FormLabel><FormControl><Input {...inputField} className="field" type={type} placeholder={placeholder} data-testid={`input-${name}`} /></FormControl><FormMessage /></FormItem>} />;
+  const field = (name: 'nome' | 'email' | 'senha' | 'idade', label: string, type = 'text', placeholder = '') => <FormField key={name} control={form.control} name={name} rules={{ required: `Informe ${label.toLowerCase()}.`, ...(name === 'idade' ? { min: { value: 13, message: 'É necessário ter pelo menos 13 anos.' } } : {}) }} render={({ field: inputField }) => <FormItem><FormLabel className="label">{label}</FormLabel>{type === 'password' ? <div className="relative"><FormControl><Input {...inputField} className="field" style={{ paddingRight: '3rem' }} type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder={placeholder} data-testid={`input-${name}`} /></FormControl><button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-[#929daf] transition-colors hover:text-[#FFA213] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} data-testid="button-toggle-senha-cadastro" onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div> : <FormControl><Input {...inputField} className="field" type={type} placeholder={placeholder} data-testid={`input-${name}`} /></FormControl>}<FormMessage /></FormItem>} />;
   return <AuthLayout><div className="auth-form enter"><p className="eyebrow">COMECE AQUI</p><h1 className="display mt-2 text-5xl uppercase">Sua jornada começa.</h1><p className="mt-2 text-sm text-[#929daf]">Crie sua conta para ter o MoveFit ao seu lado.</p>
     {error && <div className="error-box mt-5" role="alert" data-testid="status-cadastro-error">{error}</div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-6 space-y-4">
