@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Eye, EyeOff, Flame, House, LockKeyhole, LogOut, Plus, Search, Trash2, UserRound, Video, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronRight, CircleHelp, Clock3, Dumbbell, Flame, House, LockKeyhole, LogOut, Plus, Search, Trash2, UserRound, Video, X } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -46,13 +46,13 @@ function Navigation({ path, mobile = false }: { path: string; mobile?: boolean }
     {!mobile && <div className="absolute bottom-7 left-5 right-5 panel-soft p-4"><p className="eyebrow">UM DIA DE CADA VEZ</p><p className="mt-2 text-xs leading-relaxed text-[#9ca6b6]">Consistência vence intensidade. Sua próxima versão começa no próximo treino.</p></div>}
   </nav>;
 }
-function AuthBrand() { return <Link href="/login" className="brand" data-testid="link-brand">MOVE<i>FIT</i></Link>; }
+function AuthBrand() { return <Link href="/login" className="brand" data-testid="link-brand">PULSE<i>FIT</i></Link>; }
 function AuthLayout({ children }: { children: ReactNode }) {
   return <div className="auth-layout"><section className="auth-side"><AuthBrand /><div className="auth-art enter">MOVIMENTO<span>MUDA TUDO.</span></div><p className="relative z-10 max-w-xs text-sm text-[#95a0b1]">Seu treino, seu ritmo. Um companheiro para transformar intenção em consistência.</p></section><section className="auth-form-side">{children}</section></div>;
 }
 function AppShell({ children }: { children: ReactNode }) {
   const [path] = useLocation();
-  return <div className="app-shell"><Navigation path={path} /><div className="main-with-nav"><header className="topbar"><Link href="/inicio" className="brand text-[25px] md:hidden" data-testid="link-brand-mobile">MOVE<i>FIT</i></Link><span className="hidden text-xs text-[#778297] md:block">SEU ESPAÇO DE TREINO</span><Link href="/perfil" className="flex items-center gap-2 text-sm font-semibold text-[#b4bdca]" data-testid="link-top-profile"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#344057] text-[#FFA213]"><UserRound size={16} /></span>Minha conta</Link></header><main>{children}</main></div><Navigation path={path} mobile /></div>;
+  return <div className="app-shell"><Navigation path={path} /><div className="main-with-nav"><header className="topbar"><Link href="/inicio" className="brand text-[25px] md:hidden" data-testid="link-brand-mobile">PULSE<i>FIT</i></Link><span className="hidden text-xs text-[#778297] md:block">SEU ESPAÇO DE TREINO</span><Link href="/perfil" className="flex items-center gap-2 text-sm font-semibold text-[#b4bdca]" data-testid="link-top-profile"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#344057] text-[#FFA213]"><UserRound size={16} /></span>Minha conta</Link></header><main>{children}</main></div><Navigation path={path} mobile /></div>;
 }
 function Protected({ children }: { children: ReactNode }) {
   const cliente = useCliente();
@@ -68,7 +68,6 @@ function Login() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<{ email: string; senha: string }>({ defaultValues: { email: '', senha: '' } });
   async function submit(values: { email: string; senha: string }) {
     setBusy(true); setError('');
@@ -83,7 +82,7 @@ function Login() {
     {error && <div className="error-box mt-6" role="alert" data-testid="status-login-error">{error}</div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-7 space-y-5">
       <FormField control={form.control} name="email" rules={{ required: 'Informe seu e-mail.' }} render={({ field }) => <FormItem><FormLabel className="label">E-mail</FormLabel><FormControl><Input className="field" type="email" autoComplete="email" placeholder="voce@email.com" data-testid="input-email" {...field} /></FormControl><FormMessage /></FormItem>} />
-      <FormField control={form.control} name="senha" rules={{ required: 'Informe sua senha.' }} render={({ field }) => <FormItem><FormLabel className="label">Senha</FormLabel><div className="relative"><FormControl><Input className="field" style={{ paddingRight: '3rem' }} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Sua senha" data-testid="input-senha" {...field} /></FormControl><button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-[#929daf] transition-colors hover:text-[#FFA213] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div><FormMessage /></FormItem>} />
+      <FormField control={form.control} name="senha" rules={{ required: 'Informe sua senha.' }} render={({ field }) => <FormItem><FormLabel className="label">Senha</FormLabel><FormControl><Input className="field" type="password" autoComplete="current-password" placeholder="Sua senha" data-testid="input-senha" {...field} /></FormControl><FormMessage /></FormItem>} />
       <Button disabled={busy} className="btn btn-primary w-full" type="submit" data-testid="button-login">{busy ? 'Entrando…' : 'Entrar na minha conta'}<ArrowRight size={17} className="ml-2" /></Button>
     </form></Form>
     <p className="mt-6 text-center text-sm text-[#9ca6b6]">Ainda não tem conta? <Link href="/cadastro" className="font-bold" style={{ color: '#FFA213' }} data-testid="link-cadastro">Criar cadastro</Link></p>
@@ -93,7 +92,6 @@ function Cadastro() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<{ nome: string; email: string; senha: string; idade: string; sexo: string; nivelExperiencia: string }>({ defaultValues: { nome: '', email: '', senha: '', idade: '', sexo: '', nivelExperiencia: '' } });
   async function submit(values: { nome: string; email: string; senha: string; idade: string; sexo: string; nivelExperiencia: string }) {
     setBusy(true); setError('');
@@ -102,7 +100,7 @@ function Cadastro() {
       setLocation('/login');
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
   }
-  const field = (name: 'nome' | 'email' | 'senha' | 'idade', label: string, type = 'text', placeholder = '') => <FormField key={name} control={form.control} name={name} rules={{ required: `Informe ${label.toLowerCase()}.`, ...(name === 'idade' ? { min: { value: 13, message: 'É necessário ter pelo menos 13 anos.' } } : {}) }} render={({ field: inputField }) => <FormItem><FormLabel className="label">{label}</FormLabel>{type === 'password' ? <div className="relative"><FormControl><Input {...inputField} className="field" style={{ paddingRight: '3rem' }} type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder={placeholder} data-testid={`input-${name}`} /></FormControl><button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-[#929daf] transition-colors hover:text-[#FFA213] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div> : <FormControl><Input {...inputField} className="field" type={type} placeholder={placeholder} data-testid={`input-${name}`} /></FormControl>}<FormMessage /></FormItem>} />;
+  const field = (name: 'nome' | 'email' | 'senha' | 'idade', label: string, type = 'text', placeholder = '') => <FormField key={name} control={form.control} name={name} rules={{ required: `Informe ${label.toLowerCase()}.`, ...(name === 'idade' ? { min: { value: 13, message: 'É necessário ter pelo menos 13 anos.' } } : {}) }} render={({ field: inputField }) => <FormItem><FormLabel className="label">{label}</FormLabel><FormControl><Input {...inputField} className="field" type={type} placeholder={placeholder} data-testid={`input-${name}`} /></FormControl><FormMessage /></FormItem>} />;
   return <AuthLayout><div className="auth-form enter"><p className="eyebrow">COMECE AQUI</p><h1 className="display mt-2 text-5xl uppercase">Sua jornada começa.</h1><p className="mt-2 text-sm text-[#929daf]">Crie sua conta para ter o MoveFit ao seu lado.</p>
     {error && <div className="error-box mt-5" role="alert" data-testid="status-cadastro-error">{error}</div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-6 space-y-4">
@@ -140,11 +138,9 @@ function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
     staleTime: alwaysFresh ? 0 : undefined,
     refetchOnMount: alwaysFresh ? 'always' : undefined,
     queryFn: async () => {
-      const data = await request<unknown>('/api/treinos');
-      const clienteId = Number(cliente?.id);
-      return listFrom<Treino>(data, 'treinos').filter((item) =>
-        Number(item.idUsuario) === clienteId || Number(item.idUsuarioAvancado) === clienteId
-      );
+      if (!cliente) throw new Error('Usuário não autenticado.');
+      const data = await request<unknown>(`/api/treinos/usuario/${cliente.id}`);
+      return listFrom<Treino>(data, 'treinos');
     },
   });
 }
@@ -177,14 +173,19 @@ function ModalityTag({ value }: { value?: string }) {
 }
 function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
-  return <article className="workout-card panel overflow-hidden" data-testid={`card-treino-${workout.id}`}>
+  const locked = workout.liberado === false;
+  return <article className={`workout-card panel overflow-hidden ${locked ? 'opacity-70' : ''}`} data-testid={`card-treino-${workout.id}`} data-locked={locked}>
     <div className="h-1.5" style={{ backgroundColor: color }} />
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="text-[#8994a6]"><ChevronRight size={18} /></span></div>
-      <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
+      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} />{locked ? <span className="tag inline-flex items-center gap-1 border border-[#FFA21355] text-[#FFA213]" data-testid={`tag-treino-bloqueado-${workout.id}`}><LockKeyhole size={13} />Bloqueado</span> : <span className="text-[#8994a6]"><ChevronRight size={18} /></span>}</div>
+      {locked ? <div className="mt-5 cursor-not-allowed" aria-disabled="true" data-testid={`status-treino-bloqueado-${workout.id}`}>
+        <h3 className="display text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
+        <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-[#FFA213]"><LockKeyhole size={14} className="mt-0.5 shrink-0" />Conclua a sessão anterior na Agenda para liberar este treino.</p>
+      </div> : <Link href={`/treinos/${workout.id}`} className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-[#FFA213]" aria-label={`Ver detalhes de ${workout.nome}`}>
         <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
-      </Link>
+      </Link>}
       <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
         {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={25} /><span className="text-xs">Excluir</span></Button>}
       </div>
@@ -358,7 +359,7 @@ function Inicio() {
   </div>;
 }
 function Treinos() {
-  const cliente = useCliente(); const query = useTreinos(cliente);
+  const cliente = useCliente(); const query = useTreinos(cliente, true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [buildingWorkout, setBuildingWorkout] = useState<Treino | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Treino | null>(null);
@@ -472,9 +473,9 @@ function TreinoDetalhe() {
       {detail.data?.failedCount ? <div className="mb-4 rounded-xl border border-[#FFA21355] bg-[#FFA21312] p-3 text-sm text-[#ffc66e]" data-testid="status-dados-parciais">{detail.data.failedCount} exercício(s) não puderam ser carregados. O restante do treino está disponível.</div> : null}
       <div className="space-y-3">{detail.data?.exercises.map(({ relation, exercise }, index) => {
         const warmup = exercise.modalidade?.toLowerCase() === 'aquecimento';
-        const videoUrl = exerciseVideoUrl(exercise.demonstracaoVideo);
+        const videoUrl = isBeginner ? exerciseVideoUrl(exercise.demonstracaoVideo) : '';
         return <article key={`${exercise.id ?? relation.idExercicio ?? 'exercise'}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id ?? index}`}>
-          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
+          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{isBeginner && (videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>)}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
         </article>;
       })}</div>
     </>}
@@ -503,7 +504,7 @@ function Agenda() {
   }
   async function complete(item: AgendaItem) {
     setBusyId(item.id); setError(''); setNotice('');
-    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await query.refetch(); }
+    try { await request(`/api/agenda/${item.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CONCLUIDO' }) }); setNotice('Sessão concluída. A próxima etapa já pode ser liberada.'); await Promise.all([query.refetch(), treinos.refetch()]); }
     catch (e) { setError(friendlyError(e)); } finally { setBusyId(null); }
   }
   const ordered = [...(query.data || [])].sort((a,b) => new Date(a.dataAgendada).getTime() - new Date(b.dataAgendada).getTime());
