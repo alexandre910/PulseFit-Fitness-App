@@ -442,14 +442,18 @@ function Treinos() {
 function TreinoDetalhe() {
   const params = useParams<{ id: string }>(); const id = Number(params.id);
   const cliente = useCliente();
+  const isBeginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
   const treinoQuery = useTreinos(cliente);
-  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id], enabled: Number.isFinite(id), queryFn: async () => {
+  const detail = useQuery({ queryKey: ['treino-detail', id, cliente?.id, isBeginner], enabled: Number.isFinite(id), queryFn: async () => {
     const relations = listFrom<RelacaoExercicio>(await request<unknown>(`/api/treinos/${id}/exercicios`), 'exercicios');
     const settled = await Promise.allSettled(relations.map(async (relation) => {
-      if (relation.exercicio && typeof relation.exercicio === 'object') {
+      if (isBeginner) {
+        if (!relation.exercicio || typeof relation.exercicio !== 'object') {
+          throw new Error('A API não retornou os dados completos deste exercício.');
+        }
         return { relation, exercise: relation.exercicio };
       }
-      const exerciseId = exerciseIdFromRelation(relation);
+      const exerciseId = relation.idExercicio ?? (typeof relation.id === 'object' ? relation.id?.idExercicio : undefined);
       if (!Number.isFinite(exerciseId)) throw new Error('A API não informou o exercício desta série.');
       return { relation, exercise: await request<Exercico>(`/api/exercicios/${exerciseId}`) };
     }));
@@ -466,9 +470,9 @@ function TreinoDetalhe() {
       {detail.data?.failedCount ? <div className="mb-4 rounded-xl border border-[#FFA21355] bg-[#FFA21312] p-3 text-sm text-[#ffc66e]" data-testid="status-dados-parciais">{detail.data.failedCount} exercício(s) não puderam ser carregados. O restante do treino está disponível.</div> : null}
       <div className="space-y-3">{detail.data?.exercises.map(({ relation, exercise }, index) => {
         const warmup = exercise.modalidade?.toLowerCase() === 'aquecimento';
-        const videoUrl = exerciseVideoUrl(exercise.demonstracaoVideo);
+        const videoUrl = isBeginner ? exerciseVideoUrl(exercise.demonstracaoVideo) : '';
         return <article key={`${exercise.id ?? relation.idExercicio ?? 'exercise'}-${index}`} className={`panel p-4 sm:p-5 ${warmup ? 'border-l-4 border-l-[#FFA213]' : ''}`} data-testid={`card-exercicio-treino-${exercise.id ?? index}`}>
-          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
+          <div className="flex items-start gap-4"><span className="mono pt-1 text-xs text-[#6f7b8f]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2">{warmup && <span className="tag bg-[#FFA213] text-[#172033]" data-testid={`tag-aquecimento-${exercise.id ?? index}`}>Aquecimento</span>}<span className="tag">{exercise.grupoMuscular || exercise.modalidade || 'Exercício'}</span></div><h3 className="display mt-3 text-2xl uppercase text-[#e0e3e8]">{exercise.nome}</h3><p className="mt-1 text-sm text-[#929daf]">{exercise.descricao || 'Descrição não informada.'}</p>{isBeginner && (videoUrl ? <a href={videoUrl} target="_blank" rel="noreferrer" className="btn btn-primary mt-3 inline-flex items-center gap-2 text-sm" data-testid={`link-video-treino-exercicio-${exercise.id ?? index}`}><Video size={16} />Assistir demonstração<ArrowRight size={14} /></a> : <p className="mt-3 text-xs text-[#8791a2]" data-testid={`status-video-indisponivel-${exercise.id ?? index}`}>Demonstração não disponível.</p>)}</div><div className="text-right text-xs text-[#aab3c1]"><p>{relation.series ?? '—'} séries</p><p className="mt-1">{relation.repeticoes ?? '—'} repetições</p>{relation.carga && <p className="mt-1">{relation.carga}</p>}</div></div>
         </article>;
       })}</div>
     </>}

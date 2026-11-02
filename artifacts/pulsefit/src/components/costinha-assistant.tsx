@@ -5,7 +5,7 @@ import { ApiError, asArray, Exercico, friendlyError, getCliente, request, reques
 import ExerciseLevelBadge from '@/components/exercise-level-badge';
 import { useLocation } from 'wouter';
 
-type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'workout-period' | 'workout-time' | 'exercises';
+type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'workout-period' | 'workout-time' | 'nutrition-objective' | 'exercises';
 type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; error?: boolean };
 type Props = { avatarVideoUrl?: string };
 type LauncherPosition = { x: number; y: number };
@@ -374,9 +374,49 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     addMessage({ from: 'assistant', kind: 'text', text: GREETING }, GREETING);
     addMessage({ from: 'assistant', kind: 'topics' });
   };
+  const startNutrition = async () => {
+    const client = getCliente();
+    if (!client) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Entre na sua conta para receber uma orientação de nutrição.' });
+      return;
+    }
+    retryRef.current = () => { void startNutrition(); };
+    setBusy(true);
+    try {
+      const result = await request<{ resposta?: string }>('/api/assistente/nutricao', {
+        method: 'POST',
+        body: JSON.stringify({ idUsuario: client.id, etapa: 'inicio' }),
+      });
+      const response = result?.resposta?.trim();
+      if (!response) throw new Error('A API de nutrição não retornou a explicação inicial.');
+      addMessage({ from: 'assistant', kind: 'nutrition-objective', text: response });
+    } catch (error) {
+      addMessage({ from: 'assistant', kind: 'text', text: friendlyError(error), error: true });
+    } finally { setBusy(false); }
+  };
+  const chooseNutritionObjective = async (objetivo: 'massa' | 'emagrecimento') => {
+    const client = getCliente();
+    if (!client) {
+      addMessage({ from: 'assistant', kind: 'text', text: 'Entre na sua conta para receber uma orientação de nutrição.' });
+      return;
+    }
+    retryRef.current = () => { void chooseNutritionObjective(objetivo); };
+    setBusy(true);
+    try {
+      const result = await request<{ resposta?: string }>('/api/assistente/nutricao', {
+        method: 'POST',
+        body: JSON.stringify({ idUsuario: client.id, etapa: 'escolha', objetivo }),
+      });
+      const response = result?.resposta?.trim();
+      if (!response) throw new Error('A API de nutrição não retornou a recomendação.');
+      addMessage({ from: 'assistant', kind: 'topics', text: response });
+    } catch (error) {
+      addMessage({ from: 'assistant', kind: 'text', text: friendlyError(error), error: true });
+    } finally { setBusy(false); }
+  };
   const chooseTopic = (topic: string) => {
     if (topic === 'Nutrição') {
-      addMessage({ from: 'assistant', kind: 'text', text: 'A nutrição com inteligência artificial está à espera do endpoint Java. Assim que estiver disponível, poderei ajudar por aqui.' });
+      void startNutrition();
     } else if (topic === 'Musculação') {
       const text = 'A musculação fortalece os músculos e os ossos, apoia a mobilidade e pode ajudar a criar uma rotina mais ativa. Comece com cargas adequadas e respeite o seu ritmo.';
       addMessage({ from: 'assistant', kind: 'text', text });
@@ -537,6 +577,10 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       { label: 'Montar treino', aliases: ['montar treino', 'montar meu treino', 'criar treino', 'criar meu treino', 'montar treino rapido', 'treino rapido'], run: () => chooseAction('workout') },
       { label: 'Ver exercícios', aliases: ['ver exercicios', 'ver os exercicios', 'mostrar exercicios', 'exercicios'], run: () => chooseAction('exercises') },
     ];
+    if (message.kind === 'nutrition-objective') return [
+      { label: 'Ganhar massa muscular', aliases: ['ganhar massa muscular', 'ganhar massa', 'massa muscular', 'massa'], run: () => void chooseNutritionObjective('massa') },
+      { label: 'Emagrecer', aliases: ['emagrecer', 'emagrecimento', 'perder peso', 'perda de peso'], run: () => void chooseNutritionObjective('emagrecimento') },
+    ];
     if (message.kind === 'workout-level') return [
       { label: 'Iniciante', aliases: ['iniciante', 'nivel iniciante'], run: () => chooseWorkoutLevel('iniciante') },
       { label: 'Intermediário', aliases: ['intermediario', 'intermediaria', 'nivel intermediario'], run: () => chooseWorkoutLevel('intermediario') },
@@ -588,7 +632,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const prompt = choices.length
       ? `Não identifiquei uma opção para “${text}”. Escolha uma das opções mostradas (${choices.map(choice => choice.label).join(', ')}) ou tente novamente.`
       : `Recebi “${text}”, mas não consegui identificar uma opção nesta etapa. Escolha uma das opções disponíveis ou tente novamente.`;
-    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups', 'workout-level', 'workout-type', 'workout-group', 'workout-period'].includes(lastAssistantMessage.kind)) {
+    if (choices.length && lastAssistantMessage && ['topics', 'actions', 'groups', 'workout-level', 'workout-type', 'workout-group', 'workout-period', 'nutrition-objective'].includes(lastAssistantMessage.kind)) {
       addMessage({ from: 'assistant', kind: lastAssistantMessage.kind, group: lastAssistantMessage.group, text: prompt });
     } else {
       addMessage({ from: 'assistant', kind: 'text', text: prompt });
@@ -719,7 +763,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
               <button type="button" onClick={() => submitUserText('Montar treino')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-montar-treino"><Dumbbell size={15} /> Montar treino</button>
               <button type="button" onClick={() => submitUserText('Ver exercícios')} disabled={busy || listening || message.id !== activeChoiceMessageId} data-testid="button-ver-exercicios"><Activity size={15} /> Ver exercícios</button>
             </div>}
-            {['workout-level', 'workout-type', 'workout-group', 'workout-period'].includes(message.kind) && <div className="costinha-chip-row" data-testid={`choices-${message.kind}`}>
+            {['workout-level', 'workout-type', 'workout-group', 'workout-period', 'nutrition-objective'].includes(message.kind) && <div className="costinha-chip-row" data-testid={`choices-${message.kind}`}>
               {voiceChoicesFor(message).map(choice => <button
                 className="costinha-chip"
                 type="button"
