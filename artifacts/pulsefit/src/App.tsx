@@ -435,7 +435,7 @@ function Treinos() {
       </form></Form>
     </div>}
     {buildingWorkout && cliente && <ExerciseBuilder workout={buildingWorkout} cliente={cliente} />}
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Number(t.idUsuarioAvancado) === Number(cliente?.id)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : query.data?.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{query.data.map((t) => <WorkoutCard key={t.id} workout={t} canDelete={Boolean(t.podeExcluir)} onDelete={() => { setDeleteTarget(t); setDeleteError(''); setDeleteNotice(''); }} />)}</div> : <EmptyState title="Nenhum treino por aqui ainda." body="Quando houver um treino associado à sua conta, ele aparece nesta lista." />}
     <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
       <AlertDialogContent className="border-[#344057] bg-[#202b40] text-[#e0e3e8]">
         <AlertDialogHeader><AlertDialogTitle className="display text-2xl uppercase">Excluir este treino?</AlertDialogTitle><AlertDialogDescription className="text-[#aeb7c6]">“{deleteTarget?.nome}” será removido da sua lista. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
