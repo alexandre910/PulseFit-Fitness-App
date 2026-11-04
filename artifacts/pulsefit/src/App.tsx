@@ -182,7 +182,7 @@ function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDel
   return <article className={`workout-card panel overflow-hidden ${locked ? 'opacity-70' : ''}`} data-testid={`card-treino-${workout.id}`} data-locked={locked}>
     <div className="h-1.5" style={{ backgroundColor: color }} />
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} />{locked ? <span className="tag inline-flex items-center gap-1 border border-[#FFA21355] text-[#FFA213]" data-testid={`tag-treino-bloqueado-${workout.id}`}><LockKeyhole size={13} />Bloqueado</span> : <span className="text-[#8994a6]"><ChevronRight size={18} /></span>}</div>
+      <div className="flex items-start justify-between gap-3"><ModalityTag value={workout.modalidade} /><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span></div>
       {locked ? <div className="mt-5 cursor-not-allowed" aria-disabled="true" data-testid={`status-treino-bloqueado-${workout.id}`}>
         <h3 className="display text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
@@ -191,9 +191,10 @@ function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDel
         <h3 className="display mt-5 text-3xl uppercase leading-none text-[#e0e3e8]" data-testid={`text-treino-nome-${workout.id}`}>{workout.nome}</h3>
         <p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{workout.descricao || 'Um treino preparado para você avançar no seu ritmo.'}</p>
       </Link>}
-      <div className="mt-4 flex items-center justify-between gap-3"><span className="tag text-xs">{workout.nivel || 'Nível flexível'}</span>
+      {(locked || canDelete) && <div className="mt-4 flex items-center justify-between gap-3">
+        {locked ? <span className="tag inline-flex items-center gap-1 border border-[#FFA213] text-[#FFA213]" data-testid={`tag-treino-bloqueado-${workout.id}`}><LockKeyhole size={13} />Bloqueado</span> : canDelete ? <span aria-hidden="true" /> : null}
         {canDelete && <Button type="button" className="btn btn-quiet inline-flex items-center gap-2" style={{ color: '#BA1650' }} aria-label={`Excluir ${workout.nome}`} onClick={onDelete} data-testid={`button-excluir-treino-${workout.id}`}><Trash2 size={25} /><span className="text-xs">Excluir</span></Button>}
-      </div>
+      </div>}
     </div>
   </article>;
 }
