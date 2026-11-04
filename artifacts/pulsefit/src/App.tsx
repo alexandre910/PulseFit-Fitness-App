@@ -347,6 +347,17 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
       return listFrom<Exercico>(data, 'exercicios');
     },
   });
+  const normalizeLevel = (level?: string | null) =>
+    level?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() || '';
+  const workoutLevel = normalizeLevel(workout.nivel);
+  const visibleExercises = (exerciseQuery.data || []).filter((exercise) => {
+    const exerciseLevel = normalizeLevel(exercise.nivel);
+    if (workoutLevel === 'iniciante') return exerciseLevel === 'iniciante';
+    if (workoutLevel === 'intermediario') {
+      return exerciseLevel === 'iniciante' || exerciseLevel === 'intermediario';
+    }
+    return true;
+  });
   const relationQuery = useQuery({
     queryKey: ['treino-exercicios', workout.id],
     queryFn: async () => {
@@ -428,12 +439,12 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
       {relationQuery.isLoading ? <PageLoading label="Carregando exercícios do treino" /> : relationQuery.error ? <ErrorState message={friendlyError(relationQuery.error)} retry={() => relationQuery.refetch()} /> : relationQuery.data?.length ? <div className="space-y-2">{relationQuery.data.map(({ relation, exercise }, index) => <div className="panel-soft flex flex-wrap items-center justify-between gap-3 p-3" key={`${exercise?.id ?? exerciseIdFromRelation(relation) ?? 'exercise'}-${index}`}><div><p className="font-semibold text-[#e0e3e8]">{exercise?.nome || 'Exercício vinculado'}</p><p className="text-xs text-[#9ca6b6]">{exercise?.modalidade?.toLowerCase() === 'aquecimento' ? 'Aquecimento automático' : 'Exercício principal'} · {relation.series ?? '—'} séries · {relation.repeticoes ?? '—'} repetições · {relation.carga || 'Carga não informada'}</p></div>{exercise?.grupoMuscular && <span className="tag">{exercise.grupoMuscular}</span>}</div>)}</div> : <p className="rounded-xl border border-[#344057] p-4 text-sm text-[#9ca6b6]">Nenhum exercício foi retornado para este treino.</p>}
     </div>
     <div><h3 className="display mb-3 text-2xl uppercase">Biblioteca de exercícios</h3>
-      {exerciseQuery.isLoading ? <PageLoading label="Carregando biblioteca de exercícios" /> : exerciseQuery.error ? <ErrorState message={friendlyError(exerciseQuery.error)} retry={() => exerciseQuery.refetch()} /> : exerciseQuery.data?.length ? <div className="grid gap-3 sm:grid-cols-2">{exerciseQuery.data.map((exercise) => {
+      {exerciseQuery.isLoading ? <PageLoading label="Carregando biblioteca de exercícios" /> : exerciseQuery.error ? <ErrorState message={friendlyError(exerciseQuery.error)} retry={() => exerciseQuery.refetch()} /> : visibleExercises.length ? <div className="grid gap-3 sm:grid-cols-2">{visibleExercises.map((exercise) => {
         const alreadyAdded = existingIds.has(Number(exercise.id));
         const isSelected = selectedExercise?.id === exercise.id;
         return <article className="panel-soft flex flex-col gap-3 p-4" key={exercise.id} data-testid={`card-biblioteca-exercicio-${exercise.id}`}>
           <div>
-            <div className="flex flex-wrap gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span></div>
+            <div className="flex flex-wrap items-center gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span><ExerciseLevelBadge level={exercise.nivel} modality={exercise.modalidade} /></div>
             <h4 className="display mt-3 text-xl uppercase">{exercise.nome}</h4>
             <p className="mt-1 text-sm text-[#9ca6b6]">{exercise.descricao || 'Descrição não informada.'}</p>
           </div>
@@ -669,7 +680,7 @@ function Exercicios() {
   const levels = ['Todos', ...new Set((query.data || []).map((x) => x.nivel).filter(Boolean) as string[])];
   return <div className="page-wrap"><Heading kicker="BIBLIOTECA DE MOVIMENTOS" title="Exercícios" detail="Conheça os movimentos e descubra novas possibilidades." />
     <div className="panel mb-6 grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto]"><label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8791a2]" /><input className="field pl-10" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome ou grupo muscular" data-testid="input-busca-exercicio" /></label><select className="field sm:w-44" value={modality} onChange={(e) => setModality(e.target.value)} aria-label="Filtrar por modalidade" data-testid="select-modalidade"><option value="Todas">Todas as modalidades</option>{modalities.filter((m) => m !== 'Todas').map((m) => <option key={m}>{m}</option>)}</select><select className="field sm:w-40" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Filtrar por nível" data-testid="select-nivel-exercicio"><option value="Todos">Todos os níveis</option>{levels.filter((v) => v !== 'Todos').map((v) => <option key={v}>{v}</option>)}</select></div>
-    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : filtered.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filtered.map((exercise) => <Link href={`/exercicios/${exercise.id}`} key={exercise.id} className="panel block p-5 transition hover:-translate-y-1 hover:border-[#FFA21355]" data-testid={`card-exercicio-${exercise.id}`}><div className="flex items-center justify-between"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><ChevronRight size={17} className="text-[#808ca0]" /></div><h2 className="display mt-5 text-3xl uppercase">{exercise.nome}</h2><p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{exercise.descricao || 'Explore os detalhes deste movimento.'}</p><div className="mt-4 flex flex-wrap gap-2">{exercise.modalidade && <ModalityTag value={exercise.modalidade} />}{exercise.nivel && <span className="tag">{exercise.nivel}</span>}</div></Link>)}</div> : <EmptyState title="Nenhum movimento encontrado." body={query.data?.length ? 'Tente outro termo ou remova algum filtro.' : 'A biblioteca ainda não tem exercícios cadastrados.'} action={Boolean(search || modality !== 'Todas' || level !== 'Todos') ? <button className="btn btn-quiet" onClick={() => { setSearch(''); setModality('Todas'); setLevel('Todos'); }} data-testid="button-limpar-filtros">Limpar filtros</button> : undefined} />}
+    {query.isLoading ? <PageLoading /> : query.error ? <ErrorState message={friendlyError(query.error)} retry={() => query.refetch()} /> : filtered.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filtered.map((exercise) => <Link href={`/exercicios/${exercise.id}`} key={exercise.id} className="panel block p-5 transition hover:-translate-y-1 hover:border-[#FFA21355]" data-testid={`card-exercicio-${exercise.id}`}><div className="flex items-center justify-between"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><ChevronRight size={17} className="text-[#808ca0]" /></div><h2 className="display mt-5 text-3xl uppercase">{exercise.nome}</h2><p className="mt-2 line-clamp-2 min-h-10 text-sm text-[#929daf]">{exercise.descricao || 'Explore os detalhes deste movimento.'}</p><div className="mt-4 flex flex-wrap gap-2">{exercise.modalidade && <ModalityTag value={exercise.modalidade} />}{exercise.nivel && <ExerciseLevelBadge level={exercise.nivel} modality={exercise.modalidade} />}</div></Link>)}</div> : <EmptyState title="Nenhum movimento encontrado." body={query.data?.length ? 'Tente outro termo ou remova algum filtro.' : 'A biblioteca ainda não tem exercícios cadastrados.'} action={Boolean(search || modality !== 'Todas' || level !== 'Todos') ? <button className="btn btn-quiet" onClick={() => { setSearch(''); setModality('Todas'); setLevel('Todos'); }} data-testid="button-limpar-filtros">Limpar filtros</button> : undefined} />}
   </div>;
 }
 function ExercicioDetalhe() {
