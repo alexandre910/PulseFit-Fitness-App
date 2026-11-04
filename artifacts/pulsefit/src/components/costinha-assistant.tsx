@@ -1,12 +1,12 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Activity, ArrowRight, Dumbbell, ExternalLink, Mic, MicOff, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowRight, Dumbbell, ExternalLink, Mic, MicOff, RotateCcw, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { ApiError, asArray, Exercico, friendlyError, getCliente, request, requestAudio, Treino } from '@/lib/api';
 import ExerciseLevelBadge from '@/components/exercise-level-badge';
 import { useLocation } from 'wouter';
 
 type MessageKind = 'text' | 'topics' | 'actions' | 'groups' | 'workout-level' | 'workout-type' | 'workout-group' | 'workout-period' | 'workout-time' | 'nutrition-objective' | 'exercises';
-type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; group?: string; items?: Exercico[]; error?: boolean };
+type AssistantMessage = { id: number; from: 'assistant' | 'user'; kind: MessageKind; text?: string; speechText?: string; group?: string; items?: Exercico[]; error?: boolean };
 type Props = { avatarVideoUrl?: string };
 type LauncherPosition = { x: number; y: number };
 type LauncherDrag = { pointerId: number; startX: number; startY: number; origin: LauncherPosition; moved: boolean };
@@ -231,6 +231,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [audioUnavailable, setAudioUnavailable] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState('');
   const sequence = useRef(0);
@@ -241,6 +242,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const controllerRef = useRef<AbortController | null>(null);
   const controllersRef = useRef(new Set<AbortController>());
   const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const speakingMessageIdRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
   const retryRef = useRef<(() => void) | null>(null);
@@ -283,6 +285,8 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     controllersRef.current.forEach(controller => controller.abort());
     controllersRef.current.clear();
     controllerRef.current = null;
+    speakingMessageIdRef.current = null;
+    setSpeakingMessageId(null);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
@@ -294,10 +298,13 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     }
   }, []);
 
-  const speak = useCallback(async (text: string) => {
+  const speak = useCallback(async (text: string, messageId: number) => {
+    stopAudio();
     const controller = new AbortController();
     controllerRef.current = controller;
     controllersRef.current.add(controller);
+    speakingMessageIdRef.current = messageId;
+    setSpeakingMessageId(messageId);
     speechQueueRef.current = speechQueueRef.current.then(async () => {
       if (controller.signal.aborted || !openRef.current) return;
       setAudioUnavailable(false);
@@ -324,19 +331,30 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
         }
         controllersRef.current.delete(controller);
         if (controllerRef.current === controller) controllerRef.current = null;
+        if (speakingMessageIdRef.current === messageId) {
+          speakingMessageIdRef.current = null;
+          setSpeakingMessageId(null);
+        }
       }
     });
     await speechQueueRef.current;
-  }, []);
+  }, [stopAudio]);
 
   const addMessage = useCallback((message: Omit<AssistantMessage, 'id'>, voiceText?: string) => {
     const id = ++sequence.current;
-    setMessages(current => [...current, { ...message, id }]);
-    if (message.from === 'assistant') {
-      const spoken = voiceText ?? message.text;
-      if (spoken) void speak(spoken);
+    const speechText = voiceText ?? message.text;
+    setMessages(current => [...current, { ...message, id, ...(speechText ? { speechText } : {}) }]);
+  }, []);
+
+  const toggleMessageAudio = (message: AssistantMessage) => {
+    const text = message.speechText ?? message.text;
+    if (!text) return;
+    if (speakingMessageIdRef.current === message.id) {
+      stopAudio();
+      return;
     }
-  }, [speak]);
+    void speak(text, message.id);
+  };
 
   useEffect(() => {
     if (open) {
@@ -779,6 +797,15 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
                 : GROUPS.map(group => <button className="costinha-chip" type="button" key={group.api} disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText(group.label)} data-testid={`button-group-${group.api.toLowerCase()}`}>{group.label}<ArrowRight size={13} /></button>)}
             </div>}
             {message.kind === 'exercises' && <ExerciseCards items={message.items ?? []} />}
+            {message.from === 'assistant' && (message.speechText || message.text) && <button
+              className={`costinha-message-audio-button ${speakingMessageId === message.id ? 'is-speaking' : ''}`}
+              type="button"
+              onClick={() => toggleMessageAudio(message)}
+              aria-label={speakingMessageId === message.id ? 'Parar áudio' : 'Ouvir mensagem'}
+              aria-pressed={speakingMessageId === message.id}
+              title={speakingMessageId === message.id ? 'Parar áudio' : 'Ouvir mensagem'}
+              data-testid={`button-costinha-audio-${message.id}`}
+            >{speakingMessageId === message.id ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>}
           </div>
         </div>)}
         {busy && <div className="costinha-loading" role="status" data-testid="status-costinha-loading"><span /><span /><span /> <em>A procurar no seu plano…</em></div>}

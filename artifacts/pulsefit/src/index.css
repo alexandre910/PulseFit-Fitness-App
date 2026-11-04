@@ -161,6 +161,9 @@ a { color: inherit; text-decoration: none; }
 .costinha-message-row.from-user { justify-content:flex-end; }
 .costinha-bubble { width:fit-content; max-width:calc(100% - 37px); padding:11px 13px; border:1px solid rgba(204,204,204,.075); border-radius:4px 16px 16px 16px; color:#d9dee7; background:#27354b; }
 .costinha-bubble p { margin:0; font-size:13px; line-height:1.58; white-space:pre-wrap; }
+.costinha-message-audio-button { display:grid; width:30px; height:30px; place-items:center; margin:9px 0 0 auto; border:1px solid rgba(255,162,19,.26); border-radius:9px; color:#f0bd63; background:rgba(255,162,19,.07); transition:background .18s,border-color .18s,color .18s; }
+.costinha-message-audio-button:hover { border-color:#ffa213; background:rgba(255,162,19,.16); }
+.costinha-message-audio-button.is-speaking { border-color:#ffa213; color:#202638; background:#ffa213; }
 .costinha-bubble.user-bubble { max-width:82%; border-color:rgba(255,162,19,.13); border-radius:16px 4px 16px 16px; color:#202638; background:#efa52d; }
 .costinha-chip-row,.costinha-action-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
 .costinha-chip,.costinha-action-row button { display:inline-flex; min-height:35px; align-items:center; justify-content:center; gap:7px; padding:7px 10px; border:1px solid rgba(255,162,19,.3); border-radius:10px; color:#f0bd63; background:rgba(255,162,19,.07); font-size:11px; font-weight:700; transition:transform .17s,border-color .17s,background .17s; }
