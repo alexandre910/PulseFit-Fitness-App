@@ -145,6 +145,7 @@ a { color: inherit; text-decoration: none; }
 .costinha-online { width:7px; height:7px; border-radius:50%; background:#45b89c; box-shadow:0 0 0 3px rgba(69,184,156,.12); }
 .costinha-icon-button { display:grid; width:36px; height:36px; place-items:center; border:1px solid rgba(204,204,204,.12); border-radius:11px; color:#c8cfda; background:#202d42; transition:transform .18s,background .18s; }
 .costinha-icon-button:hover { transform:translateY(-2px); background:#2a3952; }
+.costinha-voice-mode-button.is-active { border-color:#ffa213; color:#202638; background:#ffa213; }
 .costinha-avatar { position:relative; display:grid; flex:none; overflow:hidden; place-items:center; border-radius:50%; background:radial-gradient(circle at 35% 27%,#ffe3a2 0 7%,#d99a48 8% 22%,#894c41 48%,#26384c 70%); }
 .costinha-avatar:before { position:absolute; inset:5px; border:1px solid rgba(255,237,190,.65); border-radius:50%; content:''; }
 .costinha-avatar-small { width:80px; height:80px; box-shadow:0 0 0 3px rgba(255,162,19,.12); }
@@ -161,9 +162,6 @@ a { color: inherit; text-decoration: none; }
 .costinha-message-row.from-user { justify-content:flex-end; }
 .costinha-bubble { width:fit-content; max-width:calc(100% - 37px); padding:11px 13px; border:1px solid rgba(204,204,204,.075); border-radius:4px 16px 16px 16px; color:#d9dee7; background:#27354b; }
 .costinha-bubble p { margin:0; font-size:13px; line-height:1.58; white-space:pre-wrap; }
-.costinha-message-audio-button { display:grid; width:30px; height:30px; place-items:center; margin:9px 0 0 auto; border:1px solid rgba(255,162,19,.26); border-radius:9px; color:#f0bd63; background:rgba(255,162,19,.07); transition:background .18s,border-color .18s,color .18s; }
-.costinha-message-audio-button:hover { border-color:#ffa213; background:rgba(255,162,19,.16); }
-.costinha-message-audio-button.is-speaking { border-color:#ffa213; color:#202638; background:#ffa213; }
 .costinha-bubble.user-bubble { max-width:82%; border-color:rgba(255,162,19,.13); border-radius:16px 4px 16px 16px; color:#202638; background:#efa52d; }
 .costinha-chip-row,.costinha-action-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
 .costinha-chip,.costinha-action-row button { display:inline-flex; min-height:35px; align-items:center; justify-content:center; gap:7px; padding:7px 10px; border:1px solid rgba(255,162,19,.3); border-radius:10px; color:#f0bd63; background:rgba(255,162,19,.07); font-size:11px; font-weight:700; transition:transform .17s,border-color .17s,background .17s; }

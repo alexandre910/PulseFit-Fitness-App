@@ -231,7 +231,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [audioUnavailable, setAudioUnavailable] = useState(false);
-  const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
+  const [voiceMode, setVoiceMode] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState('');
   const sequence = useRef(0);
@@ -242,7 +242,7 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
   const controllerRef = useRef<AbortController | null>(null);
   const controllersRef = useRef(new Set<AbortController>());
   const speechQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const speakingMessageIdRef = useRef<number | null>(null);
+  const voiceModeRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
   const retryRef = useRef<(() => void) | null>(null);
@@ -285,8 +285,6 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     controllersRef.current.forEach(controller => controller.abort());
     controllersRef.current.clear();
     controllerRef.current = null;
-    speakingMessageIdRef.current = null;
-    setSpeakingMessageId(null);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
@@ -298,13 +296,11 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     }
   }, []);
 
-  const speak = useCallback(async (text: string, messageId: number) => {
+  const speak = useCallback(async (text: string) => {
     stopAudio();
     const controller = new AbortController();
     controllerRef.current = controller;
     controllersRef.current.add(controller);
-    speakingMessageIdRef.current = messageId;
-    setSpeakingMessageId(messageId);
     speechQueueRef.current = speechQueueRef.current.then(async () => {
       if (controller.signal.aborted || !openRef.current) return;
       setAudioUnavailable(false);
@@ -331,10 +327,6 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
         }
         controllersRef.current.delete(controller);
         if (controllerRef.current === controller) controllerRef.current = null;
-        if (speakingMessageIdRef.current === messageId) {
-          speakingMessageIdRef.current = null;
-          setSpeakingMessageId(null);
-        }
       }
     });
     await speechQueueRef.current;
@@ -344,16 +336,21 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     const id = ++sequence.current;
     const speechText = voiceText ?? message.text;
     setMessages(current => [...current, { ...message, id, ...(speechText ? { speechText } : {}) }]);
-  }, []);
+    if (message.from === 'assistant' && speechText && voiceModeRef.current) void speak(speechText);
+  }, [speak]);
 
-  const toggleMessageAudio = (message: AssistantMessage) => {
-    const text = message.speechText ?? message.text;
-    if (!text) return;
-    if (speakingMessageIdRef.current === message.id) {
+  const toggleVoiceMode = () => {
+    if (voiceModeRef.current) {
+      voiceModeRef.current = false;
+      setVoiceMode(false);
       stopAudio();
       return;
     }
-    void speak(text, message.id);
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    const latest = [...messagesRef.current].reverse().find(message => message.from === 'assistant' && (message.speechText || message.text));
+    const text = latest?.speechText ?? latest?.text;
+    if (text) void speak(text);
   };
 
   useEffect(() => {
@@ -368,6 +365,8 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
       if (event.key === 'Escape') {
         stopRecognition();
         setOpen(false);
+        voiceModeRef.current = false;
+        setVoiceMode(false);
         stopAudio();
       }
     };
@@ -381,11 +380,19 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
     stopAudio();
   }, [stopAudio]);
 
-  const close = () => { stopRecognition(); setOpen(false); stopAudio(); };
+  const close = () => {
+    stopRecognition();
+    setOpen(false);
+    voiceModeRef.current = false;
+    setVoiceMode(false);
+    stopAudio();
+  };
   const launch = () => {
     if (open) return;
     setMessages([]);
     messagesRef.current = [];
+    voiceModeRef.current = false;
+    setVoiceMode(false);
     setDraft('');
     setVoiceNotice('');
     setOpen(true);
@@ -766,6 +773,15 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
           {avatarVideoUrl ? <video src={avatarVideoUrl} muted loop autoPlay playsInline /> : <div className="costinha-face"><span /><i /><b /></div>}
         </div>
         <div className="costinha-headcopy"><span className="costinha-eyebrow">O SEU COMPANHEIRO</span><h2 id="costinha-title">Costinha <span className="costinha-online" /></h2><p>Consistência, um treino de cada vez.</p></div>
+        <button
+          className={`costinha-icon-button costinha-voice-mode-button ${voiceMode ? 'is-active' : ''}`}
+          type="button"
+          onClick={toggleVoiceMode}
+          aria-label={voiceMode ? 'Parar modo de voz' : 'Ativar modo de voz'}
+          aria-pressed={voiceMode}
+          title={voiceMode ? 'Parar modo de voz' : 'Ativar modo de voz'}
+          data-testid="button-costinha-voice-mode"
+        >{voiceMode ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
         <button className="costinha-icon-button" type="button" onClick={close} aria-label="Fechar conversa" data-testid="button-close-costinha"><X size={19} /></button>
       </header>
       <div className="costinha-messages" ref={scrollRef} role="log" aria-live="polite" aria-label="Conversa com Costinha" data-testid="list-costinha-messages">
@@ -797,15 +813,6 @@ export default function CostinhaAssistant({ avatarVideoUrl }: Props) {
                 : GROUPS.map(group => <button className="costinha-chip" type="button" key={group.api} disabled={busy || listening || message.id !== activeChoiceMessageId} onClick={() => submitUserText(group.label)} data-testid={`button-group-${group.api.toLowerCase()}`}>{group.label}<ArrowRight size={13} /></button>)}
             </div>}
             {message.kind === 'exercises' && <ExerciseCards items={message.items ?? []} />}
-            {message.from === 'assistant' && (message.speechText || message.text) && <button
-              className={`costinha-message-audio-button ${speakingMessageId === message.id ? 'is-speaking' : ''}`}
-              type="button"
-              onClick={() => toggleMessageAudio(message)}
-              aria-label={speakingMessageId === message.id ? 'Parar áudio' : 'Ouvir mensagem'}
-              aria-pressed={speakingMessageId === message.id}
-              title={speakingMessageId === message.id ? 'Parar áudio' : 'Ouvir mensagem'}
-              data-testid={`button-costinha-audio-${message.id}`}
-            >{speakingMessageId === message.id ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>}
           </div>
         </div>)}
         {busy && <div className="costinha-loading" role="status" data-testid="status-costinha-loading"><span /><span /><span /> <em>A procurar no seu plano…</em></div>}
