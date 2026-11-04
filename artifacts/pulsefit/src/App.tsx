@@ -115,23 +115,148 @@ function Cadastro() {
   </div></AuthLayout>;
 }
 function Questionario() {
-  const cliente = useCliente(); const [, setLocation] = useLocation(); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const cliente = useCliente();
+  const [, setLocation] = useLocation();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const beginner = ['iniciante', 'beginner'].includes(cliente?.nivelExperiencia?.toLowerCase() || '');
-  useEffect(() => { if (cliente && (!beginner || !isQuestionarioPendente())) setLocation('/inicio'); }, [cliente, beginner, setLocation]);
-  const form = useForm<{ frequencia: string }>({ defaultValues: { frequencia: '' } });
-  async function submit(values: { frequencia: string }) {
+
+  useEffect(() => {
+    if (cliente && (!beginner || !isQuestionarioPendente())) setLocation('/inicio');
+  }, [cliente, beginner, setLocation]);
+
+  const form = useForm<{ frequencia: string; objetivo: string }>({
+    defaultValues: { frequencia: '', objetivo: '' },
+  });
+
+  async function submit(values: { frequencia: string; objetivo: string }) {
     if (!cliente) return;
-    setBusy(true); setError('');
-    try { await request('/api/questionarios', { method: 'POST', body: JSON.stringify({ idUsuario: cliente.id, frequencia: values.frequencia }) }); setQuestionarioPendente(false); setLocation('/inicio'); }
-    catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
+    setBusy(true);
+    setError('');
+    try {
+      await request('/api/questionarios', {
+        method: 'POST',
+        body: JSON.stringify({
+          idUsuario: cliente.id,
+          frequencia: values.frequencia,
+          objetivo: values.objetivo,
+        }),
+      });
+      setQuestionarioPendente(false);
+      setLocation('/inicio');
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Protected><div className="page-wrap max-w-3xl"><div className="panel p-6 sm:p-10"><p className="eyebrow">SEU PONTO DE PARTIDA</p><h1 className="page-title">Vamos ajustar o seu ritmo.</h1><p className="subtle mb-8">Uma resposta rápida para começar com um plano que cabe na sua rotina.</p>{error && <div className="error-box mb-5" role="alert" data-testid="status-questionario-error">{error}</div>}
-    <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-6">
-      <FormField control={form.control} name="frequencia" rules={{ required: 'Escolha uma frequência.' }} render={({ field }) => <FormItem><FormLabel className="label text-sm">Quantos dias por semana você consegue treinar?</FormLabel><FormControl><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{['1–2 dias', '3 dias', '4 dias', '5 ou mais'].map((value) => <button type="button" key={value} onClick={() => field.onChange(value)} className={`panel-soft p-4 text-sm font-semibold transition ${field.value === value ? 'border-[#FFA213] text-[#FFA213]' : 'text-[#aeb7c6]'}`} data-testid={`button-frequencia-${value.replace(/\W/g, '').toLowerCase()}`}>{value}</button>)}</div></FormControl><FormMessage /></FormItem>} />
-      <div className="flex items-start gap-3 text-xs text-[#8791a2]"><CircleHelp size={16} className="mt-0.5 shrink-0 text-[#FFA213]" />Você poderá ajustar sua rotina depois. Vamos usar apenas essa informação para concluir seu início.</div>
-      <Button disabled={busy} type="submit" className="btn btn-primary w-full sm:w-auto" data-testid="button-questionario">{busy ? 'Salvando…' : 'Continuar para o MoveFit'}<ArrowRight size={17} className="ml-2" /></Button>
-    </form></Form>
-  </div></div></Protected>;
+
+  return (
+    <Protected>
+      <div className="page-wrap max-w-3xl">
+        <div className="panel p-6 sm:p-10">
+          <p className="eyebrow">SEU PONTO DE PARTIDA</p>
+          <h1 className="page-title">Vamos ajustar o seu ritmo.</h1>
+          <p className="subtle mb-8">
+            Duas respostas rápidas para começar com um plano que cabe na sua rotina.
+          </p>
+          {error && (
+            <div className="error-box mb-5" role="alert" data-testid="status-questionario-error">
+              {error}
+            </div>
+          )}
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="frequencia"
+                rules={{ required: 'Escolha uma frequência.' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="label text-sm">
+                      Quantos dias por semana você consegue treinar?
+                    </FormLabel>
+                    <FormControl>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {['1–2 dias', '3 dias', '4 dias', '5 ou mais'].map((value) => (
+                          <button
+                            type="button"
+                            key={value}
+                            aria-pressed={field.value === value}
+                            onClick={() => field.onChange(value)}
+                            className={`panel-soft p-4 text-sm font-semibold transition ${
+                              field.value === value
+                                ? 'border-[#FFA213] text-[#FFA213]'
+                                : 'text-[#aeb7c6]'
+                            }`}
+                            data-testid={`button-frequencia-${value.replace(/\W/g, '').toLowerCase()}`}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="objetivo"
+                rules={{ required: 'Escolha um objetivo.' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="label text-sm">Qual é o seu objetivo principal?</FormLabel>
+                    <FormControl>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { value: 'emagrecimento', label: 'Emagrecer' },
+                          { value: 'massa', label: 'Ganhar massa muscular' },
+                        ].map(({ value, label }) => (
+                          <button
+                            type="button"
+                            key={value}
+                            aria-pressed={field.value === value}
+                            onClick={() => field.onChange(value)}
+                            className={`panel-soft p-4 text-sm font-semibold transition ${
+                              field.value === value
+                                ? 'border-[#FFA213] text-[#FFA213]'
+                                : 'text-[#aeb7c6]'
+                            }`}
+                            data-testid={`button-objetivo-${value}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex items-start gap-3 text-xs text-[#8791a2]">
+                <CircleHelp size={16} className="mt-0.5 shrink-0 text-[#FFA213]" />
+                Você poderá ajustar sua rotina depois. Vamos usar apenas essas informações para
+                concluir seu início.
+              </div>
+              <Button
+                disabled={busy || !form.watch('frequencia') || !form.watch('objetivo')}
+                type="submit"
+                className="btn btn-primary w-full sm:w-auto"
+                data-testid="button-questionario"
+              >
+                {busy ? 'Salvando…' : 'Continuar para o MoveFit'}
+                <ArrowRight size={17} className="ml-2" />
+              </Button>
+            </form>
+          </Form>
+        </div>
+      </div>
+    </Protected>
+  );
 }
 function useTreinos(cliente: Cliente | null, alwaysFresh = false) {
   return useQuery({
