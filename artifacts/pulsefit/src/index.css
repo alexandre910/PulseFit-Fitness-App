@@ -145,7 +145,8 @@ a { color: inherit; text-decoration: none; }
 .costinha-online { width:7px; height:7px; border-radius:50%; background:#45b89c; box-shadow:0 0 0 3px rgba(69,184,156,.12); }
 .costinha-icon-button { display:grid; width:36px; height:36px; place-items:center; border:1px solid rgba(204,204,204,.12); border-radius:11px; color:#c8cfda; background:#202d42; transition:transform .18s,background .18s; }
 .costinha-icon-button:hover { transform:translateY(-2px); background:#2a3952; }
-.costinha-voice-mode-button.is-active { border-color:#ffa213; color:#202638; background:#ffa213; }
+.costinha-voice-mode-button { color:#ffa213; }
+.costinha-voice-mode-button.is-active { border-color:#ffa213; color:#ffa213; background:rgba(255,162,19,.14); }
 .costinha-avatar { position:relative; display:grid; flex:none; overflow:hidden; place-items:center; border-radius:50%; background:radial-gradient(circle at 35% 27%,#ffe3a2 0 7%,#d99a48 8% 22%,#894c41 48%,#26384c 70%); }
 .costinha-avatar:before { position:absolute; inset:5px; border:1px solid rgba(255,237,190,.65); border-radius:50%; content:''; }
 .costinha-avatar-small { width:80px; height:80px; box-shadow:0 0 0 3px rgba(255,162,19,.12); }
