@@ -173,6 +173,9 @@ function ModalityTag({ value }: { value?: string }) {
   const cls = value?.toLowerCase() === 'musculacao' || value?.toLowerCase() === 'musculação' ? 'modality-musculacao' : value?.toLowerCase() === 'calistenia' ? 'modality-calistenia' : '';
   return <span className={`tag ${cls} ${cls ? 'text-white' : ''}`} data-testid="text-modalidade">{value || 'Modalidade não informada'}</span>;
 }
+function normalizeExerciseLevel(value?: string | null) {
+  return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
 function WorkoutCard({ workout, canDelete, onDelete }: { workout: Treino; canDelete: boolean; onDelete: () => void }) {
   const color = workout.modalidade?.toLowerCase().includes('calistenia') ? '#BA1650' : '#056C5C';
   const locked = workout.liberado === false;
@@ -213,14 +216,22 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
   const params = new URLSearchParams();
   if (groupMuscular) params.set('grupoMuscular', groupMuscular);
   if (modality) params.set('modalidade', modality);
+  params.set('idUsuario', String(cliente.id));
   const exerciseQuery = useQuery({
-    queryKey: ['exercicios-builder', groupMuscular, modality],
+    queryKey: ['exercicios-builder', cliente.id, groupMuscular, modality],
     enabled: true,
     queryFn: async () => {
       const suffix = params.toString();
       const data = await request<unknown>(`/api/exercicios${suffix ? `?${suffix}` : ''}`);
       return listFrom<Exercico>(data, 'exercicios');
     },
+  });
+  const workoutLevel = normalizeExerciseLevel(workout.nivel);
+  const libraryExercises = (exerciseQuery.data || []).filter((exercise) => {
+    const exerciseLevel = normalizeExerciseLevel(exercise.nivel);
+    if (workoutLevel === 'iniciante') return exerciseLevel === 'iniciante';
+    if (workoutLevel === 'intermediario') return exerciseLevel === 'iniciante' || exerciseLevel === 'intermediario';
+    return true;
   });
   const relationQuery = useQuery({
     queryKey: ['treino-exercicios', workout.id],
@@ -303,12 +314,12 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
       {relationQuery.isLoading ? <PageLoading label="Carregando exercícios do treino" /> : relationQuery.error ? <ErrorState message={friendlyError(relationQuery.error)} retry={() => relationQuery.refetch()} /> : relationQuery.data?.length ? <div className="space-y-2">{relationQuery.data.map(({ relation, exercise }, index) => <div className="panel-soft flex flex-wrap items-center justify-between gap-3 p-3" key={`${exercise?.id ?? exerciseIdFromRelation(relation) ?? 'exercise'}-${index}`}><div><p className="font-semibold text-[#e0e3e8]">{exercise?.nome || 'Exercício vinculado'}</p><p className="text-xs text-[#9ca6b6]">{exercise?.modalidade?.toLowerCase() === 'aquecimento' ? 'Aquecimento automático' : 'Exercício principal'} · {relation.series ?? '—'} séries · {relation.repeticoes ?? '—'} repetições · {relation.carga || 'Carga não informada'}</p></div>{exercise?.grupoMuscular && <span className="tag">{exercise.grupoMuscular}</span>}</div>)}</div> : <p className="rounded-xl border border-[#344057] p-4 text-sm text-[#9ca6b6]">Nenhum exercício foi retornado para este treino.</p>}
     </div>
     <div><h3 className="display mb-3 text-2xl uppercase">Biblioteca de exercícios</h3>
-      {exerciseQuery.isLoading ? <PageLoading label="Carregando biblioteca de exercícios" /> : exerciseQuery.error ? <ErrorState message={friendlyError(exerciseQuery.error)} retry={() => exerciseQuery.refetch()} /> : exerciseQuery.data?.length ? <div className="grid gap-3 sm:grid-cols-2">{exerciseQuery.data.map((exercise) => {
+      {exerciseQuery.isLoading ? <PageLoading label="Carregando biblioteca de exercícios" /> : exerciseQuery.error ? <ErrorState message={friendlyError(exerciseQuery.error)} retry={() => exerciseQuery.refetch()} /> : libraryExercises.length ? <div className="grid gap-3 sm:grid-cols-2">{libraryExercises.map((exercise) => {
         const alreadyAdded = existingIds.has(Number(exercise.id));
         const isSelected = selectedExercise?.id === exercise.id;
         return <article className="panel-soft flex flex-col gap-3 p-4" key={exercise.id} data-testid={`card-biblioteca-exercicio-${exercise.id}`}>
           <div>
-            <div className="flex flex-wrap gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span></div>
+            <div className="flex flex-wrap gap-2"><span className="tag">{exercise.grupoMuscular || 'Grupo não informado'}</span><span className="tag">{exercise.modalidade || 'Modalidade não informada'}</span><ExerciseLevelBadge level={exercise.nivel} modality={exercise.modalidade} /></div>
             <h4 className="display mt-3 text-xl uppercase">{exercise.nome}</h4>
             <p className="mt-1 text-sm text-[#9ca6b6]">{exercise.descricao || 'Descrição não informada.'}</p>
           </div>
