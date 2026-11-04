@@ -83,6 +83,8 @@
     font-family: var(--app-font-sans);
   }
   button, input, select { font: inherit; }
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear { display: none; }
   button { cursor: pointer; }
 }
 
