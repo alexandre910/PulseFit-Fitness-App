@@ -79,7 +79,7 @@ function Login() {
       setLocation(result.questionarioPendente ? '/questionario' : '/inicio');
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
   }
-  return <AuthLayout><div className="auth-form enter"><p className="eyebrow">BEM-VINDE DE VOLTA</p><h1 className="display mt-2 text-5xl uppercase">Retome seu ritmo.</h1><p className="mt-2 text-sm text-[#929daf]">Entre na sua conta e continue de onde parou.</p>
+  return <AuthLayout><div className="auth-form enter"><p className="eyebrow">Bem-Vindo de Volta</p><h1 className="display mt-2 text-5xl uppercase">Retome seu ritmo.</h1><p className="mt-2 text-sm text-[#929daf]">Entre na sua conta e continue de onde parou.</p>
     {error && <div className="error-box mt-6" role="alert" data-testid="status-login-error">{error}</div>}
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-7 space-y-5">
       <FormField control={form.control} name="email" rules={{ required: 'Informe seu e-mail.' }} render={({ field }) => <FormItem><FormLabel className="label">E-mail</FormLabel><FormControl><Input className="field" type="email" autoComplete="email" placeholder="voce@email.com" data-testid="input-email" {...field} /></FormControl><FormMessage /></FormItem>} />
