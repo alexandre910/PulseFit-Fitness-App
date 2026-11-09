@@ -349,11 +349,13 @@ function ExerciseBuilder({ workout, cliente }: { workout: Treino; cliente: Clien
   });
   const normalizeLevel = (level?: string | null) =>
     level?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() || '';
-  const workoutLevel = normalizeLevel(workout.nivel);
+  const clienteLevel = normalizeLevel(cliente.nivelExperiencia);
+  const isMusculacao = normalizeLevel(modality) === 'musculacao';
   const visibleExercises = (exerciseQuery.data || []).filter((exercise) => {
+    if (!isMusculacao) return true;
     const exerciseLevel = normalizeLevel(exercise.nivel);
-    if (workoutLevel === 'iniciante') return exerciseLevel === 'iniciante';
-    if (workoutLevel === 'intermediario') {
+    if (clienteLevel === 'iniciante') return exerciseLevel === 'iniciante';
+    if (clienteLevel === 'intermediario') {
       return exerciseLevel === 'iniciante' || exerciseLevel === 'intermediario';
     }
     return true;
