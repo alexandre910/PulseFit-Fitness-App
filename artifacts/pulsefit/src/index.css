@@ -113,6 +113,10 @@ a { color: inherit; text-decoration: none; }
 .btn-logout-3d:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 7px 0 #68102f,0 12px 18px rgba(3,9,20,.34); filter:brightness(1.08); }
 .btn-logout-3d:active:not(:disabled) { transform:translateY(3px); box-shadow:0 2px 0 #68102f,0 4px 8px rgba(3,9,20,.25); filter:brightness(.96); }
 .btn-logout-3d:focus-visible { outline:2px solid #ffa213; outline-offset:3px; }
+.btn-logout-solid-3d { box-shadow:0 5px 0 #7d0f36,0 9px 16px rgba(3,9,20,.3); transition:transform .15s,box-shadow .15s; }
+.btn-logout-solid-3d:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 7px 0 #7d0f36,0 12px 18px rgba(3,9,20,.34); }
+.btn-logout-solid-3d:active:not(:disabled) { transform:translateY(3px); box-shadow:0 2px 0 #7d0f36,0 4px 8px rgba(3,9,20,.25); }
+.btn-logout-solid-3d:focus-visible { outline:2px solid #ffa213; outline-offset:3px; }
 .field { width: 100%; border: 1px solid var(--line); color: var(--ink); background: #172033; padding: 13px 14px; border-radius: 10px; outline: none; }
 .field:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(255,162,19,.12); }
 .field::placeholder { color: #748094; }
