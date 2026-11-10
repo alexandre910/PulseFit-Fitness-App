@@ -1,4 +1,4 @@
-export const API_BASE = 'https://shaded-jot-pacify.ngrok-free.dev';
+export const API_BASE = 'https://movefit-alexandre.duckdns.org';
 
 function apiHeaders(headers?: HeadersInit) {
   const merged = new Headers(headers);
